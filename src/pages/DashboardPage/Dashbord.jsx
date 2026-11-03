@@ -22,6 +22,7 @@ import {
   ScanQrCode,
   School,
   ShieldAlert,
+  Trophy,
   User,
   UserCircle,
   UserRound,
@@ -35,6 +36,8 @@ import AttendanceHistory from "../AttendanceHistoryPage/AttendanceHistory.jsx";
 import Students from "../StudentsPage/Students.jsx";
 import Teachers from "../TeachersPage/Teachers.jsx";
 import Classes from "../ClassesPage/Classes.jsx";
+import Extracurricular from "../ExtracurricularPage/Extracurricular.jsx";
+import Schedules from "../SchedulesPage/Schedules.jsx";
 import { createDashboardData, getProfileView } from "./dashboardData.js";
 
 const localViews = new Set([
@@ -43,6 +46,8 @@ const localViews = new Set([
   "data_siswa",
   "data_guru",
   "classes",
+  "extracurricular",
+  "schedules",
   "attendance",
   "attendance-history",
 ]);
@@ -130,7 +135,7 @@ export default function Dashbord({
       )}
 
       <div
-        className={`relative z-10 mx-3 -mt-24 min-h-[calc(100dvh-54px)] rounded-t-[24px] bg-white pb-28 sm:min-h-[790px] ${["attendance", "attendance-history", "data_siswa", "data_guru", "classes"].includes(active) ? "px-0 pt-0" : "px-3 pt-4"}`}
+        className={`relative z-10 mx-3 -mt-24 min-h-[calc(100dvh-54px)] rounded-t-[24px] bg-white pb-28 sm:min-h-[790px] ${["attendance", "attendance-history", "data_siswa", "data_guru", "classes", "extracurricular", "schedules"].includes(active) ? "px-0 pt-0" : "px-3 pt-4"}`}
       >
         {active === "attendance" && <Attendance />}
         {active === "attendance-history" && <AttendanceHistory />}
@@ -171,6 +176,8 @@ export default function Dashbord({
           <Teachers onTeacherCreated={teachers.reload} />
         )}
         {active === "classes" && <Classes />}
+        {active === "extracurricular" && <Extracurricular />}
+        {active === "schedules" && <Schedules />}
       </div>
 
       <BottomNavigation active={active} onNavigate={handleNavigate} />
@@ -291,6 +298,8 @@ const menuItems = [
   { key: "data_siswa", label: "Data Siswa", Icon: ContactRound },
   { key: "data_guru", label: "Data Guru", Icon: UsersRound },
   { key: "classes", label: "Data Kelas", Icon: School },
+  { key: "extracurricular", label: "Ekstrakurikuler", Icon: Trophy },
+  { key: "schedules", label: "Jadwal", Icon: CalendarDays },
 ];
 
 function Sidebar({
