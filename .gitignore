@@ -1,0 +1,13 @@
+# Dependencies (install ulang pakai: npm install)
+node_modules/
+
+# Hasil build (bikin ulang pakai: npm run build)
+dist/
+
+# Konfigurasi lokal tiap komputer (contohnya ada di .env.example)
+.env.local
+.env.*.local
+
+# Folder lain di luar project
+PKM1/
+agent-park/
