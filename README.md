@@ -2,7 +2,7 @@
 
 Halaman login mengikuti referensi dan berada di `src/pages/LoginPage/Login.jsx`. Panduan lokasi editing, aset, payload, serta kontrak endpoint login ada di [docs/login-page.md](docs/login-page.md). Rute frontend tersedia di `/login`, `/register`, dan `/dashboard`. Setelah login berhasil, pengguna diarahkan ke `/dashboard`; saat aplikasi dibuka atau di-refresh, sesi divalidasi melalui backend sebelum dashboard ditampilkan.
 
-Komponen bersama dashboard berada di `src/pages/DashboardPage/Dashbord.jsx`, yang digunakan oleh `src/App.jsx`. Bottom Navigation, ganti password, header, profil, sidebar, kartu statistik, dan welcome card menjadi fungsi internal di file tersebut. Halaman Absensi, Riwayat Absensi, Data Siswa, Data Guru, dan Data Kelas berada di folder halaman masing-masing dan memakai navigasi dashboard yang sama.
+Komponen bersama dashboard berada di `src/pages/DashboardPage/Dashbord.jsx`, yang digunakan oleh `src/App.jsx`. Bottom Navigation, ganti password, header, profil, sidebar, kartu statistik, dan welcome card menjadi fungsi internal di file tersebut. Halaman Absensi, Riwayat Absensi, Data Siswa, Data Guru, Data Kelas, Ekstrakurikuler, dan Jadwal berada di folder halaman masing-masing dan memakai navigasi dashboard yang sama.
 
 ```text
 src/pages/DashboardPage/
@@ -24,6 +24,10 @@ src/pages/TeachersPage/Teachers.jsx # Kartu guru, pencarian nama/NIP, dan modal 
 src/services/teachers.js # GET pencarian guru dan POST tambah guru melalui Axios
 src/pages/ClassesPage/Classes.jsx # Kartu kelas, pencarian, modal tambah/detail/edit
 src/services/classes.js # GET/POST kelas dan GET/PUT detail kelas melalui Axios
+src/pages/ExtracurricularPage/Extracurricular.jsx # Kegiatan, pembina, hari/jam, tambah/detail/edit
+src/pages/SchedulesPage/Schedules.jsx # Jadwal pelajaran, filter hari/kelas, tambah/detail/edit
+src/services/extracurricular.js # GET/POST/PUT ekstrakurikuler melalui Axios
+src/services/schedules.js # GET/POST/PUT jadwal melalui Axios
 src/services/auth.js      # Request login, pemetaan respons, dan sesi
 docs/api-contracts.md     # Kontrak yang diketahui dan contoh penggunaan
 docs/login-page.md        # Panduan editing dan integrasi login
@@ -51,6 +55,9 @@ VITE_LOGOUT_ENDPOINT=/api/logout
 VITE_ATTENDANCE_ENDPOINT=/api/absensi
 VITE_CLASSES_ENDPOINT=/api/kelas
 VITE_ATTENDANCE_HISTORY_ENDPOINT=/api/absensi/riwayat
+VITE_EXTRACURRICULAR_ENDPOINT=/api/ekstrakurikuler
+VITE_EXTRACURRICULAR_PHOTOS_ENDPOINT=/api/ekstrakurikuler/foto
+VITE_SCHEDULES_ENDPOINT=/api/jadwal
 ```
 
 Jika route backend tidak memakai prefix `/api`, gunakan `/data_siswa` dan `/data_guru`. Restart Vite setelah mengubah konfigurasi. Gunakan hostname yang sama untuk frontend dan backend, misalnya `localhost` pada keduanya; jangan mencampur `localhost` dengan `127.0.0.1` untuk sesi cookie. Konfigurasi lama `VITE_DASHBOARD_ENDPOINT` tidak digunakan lagi.
@@ -64,6 +71,10 @@ Sidebar **Riwayat Absensi** membuka daftar nama dan status kehadiran dengan filt
 Frontend memanggil kedua endpoint saat Dashboard Page dibuka. Menu **Data Siswa** memiliki halaman kartu, pencarian nama/NIS di server, ringkasan jumlah siswa/kelas, pagination, dan form **+ Data Siswa** melalui GET/POST `/api/data_siswa`; kontraknya ada di [docs/students-page.md](docs/students-page.md). Menu **Data Guru** menyediakan kartu nama/NIP, status, mata pelajaran, pencarian, pagination, serta form **+ Data Guru** melalui GET/POST `/api/data_guru`; kontraknya ada di [docs/teachers-page.md](docs/teachers-page.md). Kegagalan satu endpoint tidak menghalangi endpoint lainnya. Masing-masing menyediakan loading, pesan error, dan tombol coba lagi. Jumlah yang belum tersedia ditampilkan sebagai `—`; respons kosong yang valid menghasilkan `0`.
 
 Menu **Data Kelas** menyediakan pencarian nama kelas, kartu jumlah siswa/wali kelas, pagination, serta form tambah, detail, dan edit. Axios memakai GET/POST `/api/kelas`, GET/PUT `/api/kelas/{id_kelas}`, dan GET `/api/data_guru` untuk pilihan wali kelas. Payload simpan berisi `nama_kelas` dan `id_wali_kelas`. Kontrak lengkap dan kebutuhan backend ada di [docs/classes-page.md](docs/classes-page.md).
+
+Menu **Ekstrakurikuler** dan **Jadwal** menyediakan daftar, pencarian, filter hari, pagination, serta form tambah/detail/edit. Jadwal pelajaran juga dapat difilter berdasarkan kelas. Endpoint default memakai GET/POST `/api/ekstrakurikuler` dan `/api/jadwal`, serta GET/PUT `/{id}` pada masing-masing resource. Pilihan guru/kelas diambil dari API yang sudah ada. Kontrak payload, respons, validasi waktu WIB, dan kebutuhan backend ada di [docs/school-activities-api.md](docs/school-activities-api.md).
+
+Ekstrakurikuler menampilkan carousel di bawah judul, sebelum filter. Form tambah/edit mendukung preview dan upload maksimal 5 foto WebP/JPG/JPEG, saran 1200 × 600 piksel dan 150–300 KB, batas 2 MB/file. Galeri memakai GET `/api/ekstrakurikuler/foto`; unggahan memakai multipart `foto[]`, dan edit foto memakai POST dengan `_method=PUT`. Kontrak penyimpanan/URL foto dan contoh respons ada di [panduan foto ekstrakurikuler](docs/school-activities-api.md#foto-kegiatan-dan-carousel).
 
 ## Menggunakan Axios
 
