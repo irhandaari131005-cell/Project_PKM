@@ -1,6 +1,6 @@
 ﻿# Dashboard Page — React + Tailwind CSS
 
-Halaman login mengikuti referensi dan berada di `src/pages/LoginPage/Login.jsx`. Panduan lokasi editing, aset, payload, serta kontrak endpoint login ada di [docs/login-page.md](docs/login-page.md). Saat development, aplikasi langsung membuka preview dashboard. Pada hasil build, aplikasi membuka login jika belum ada token sesi; setelah respons login valid, aplikasi membuka dashboard.
+Halaman login mengikuti referensi dan berada di `src/pages/LoginPage/Login.jsx`. Panduan lokasi editing, aset, payload, serta kontrak endpoint login ada di [docs/login-page.md](docs/login-page.md). Rute frontend tersedia di `/login`, `/register`, dan `/dashboard`. Setelah login berhasil, pengguna diarahkan ke `/dashboard`; saat aplikasi dibuka atau di-refresh, sesi divalidasi melalui backend sebelum dashboard ditampilkan.
 
 Komponen bersama dashboard berada di `src/pages/DashboardPage/Dashbord.jsx`, yang digunakan oleh `src/App.jsx`. Bottom Navigation, ganti password, header, profil, sidebar, kartu statistik, dan welcome card menjadi fungsi internal di file tersebut. Halaman Absensi, Riwayat Absensi, Data Siswa, Data Guru, dan Data Kelas berada di folder halaman masing-masing dan memakai navigasi dashboard yang sama.
 
@@ -9,7 +9,9 @@ src/pages/DashboardPage/
   Dashbord.jsx           # Seluruh tampilan dan navigasi dashboard
   dashboardData.js       # Payload asli, pemetaan tampilan, dan statistik
   useDashboardData.js    # Loading, error, retry, dan pembatalan request
-src/services/api.js      # Axios instance, endpoint, dan Bearer token
+src/routes.js            # Helper rute URL dan kompatibilitas tautan ?page=
+src/App.jsx              # Perpindahan halaman dan pemeriksaan sesi
+src/services/api.js      # Axios instance, cookie sesi, dan kompatibilitas Bearer
 src/services/apiContracts.js # Nama field backend dan helper payload kirim
 src/pages/LoginPage/Login.jsx # Tampilan login dalam satu file
 src/pages/AttendancePage/Attendance.jsx # Halaman TAP kartu, masuk/pulang, jam, dan form SN
@@ -34,26 +36,28 @@ npm install
 npm run dev
 ```
 
-Saat menjalankan `npm run dev`, buka alamat yang ditampilkan Vite untuk melihat dashboard tanpa login. Untuk melihat halaman login saat belum ada sesi, tambahkan `?page=login` pada alamat tersebut (contoh: `http://localhost:5173/?page=login`), atau klik **Keluar** di dashboard. Link **REGISTER** di bawah tombol LOGIN membuka form pendaftaran (`?page=register`). Preview ini tidak membuat token sesi; data dari endpoint yang memerlukan login tetap membutuhkan sesi backend yang valid.
+Saat menjalankan `npm run dev`, buka alamat yang ditampilkan Vite. URL `/` mengarahkan pengguna ke `/dashboard` bila sesi backend valid, atau `/login` bila belum login. Link **REGISTER** membuka `/register`. Tautan lama `?page=login` dan `?page=register` tetap didukung dan diubah ke path yang sesuai. Alur autentikasi sama pada development dan hasil build; tidak ada bypass login untuk preview dashboard.
 
-Salin `.env.example` ke `.env.local` jika file konfigurasi belum ada. Atur alamat backend dan path endpoint sesuai route Laravel:
+Salin `.env.example` ke `.env.local` jika file konfigurasi belum ada. Atur alamat backend dan path endpoint sesuai route backend:
 
 ```env
-VITE_API_BASE_URL=http://127.0.0.1:8000
+VITE_API_BASE_URL=http://localhost:8080
 VITE_DATA_SISWA_ENDPOINT=/api/data_siswa
 VITE_DATA_GURU_ENDPOINT=/api/data_guru
 VITE_LOGIN_ENDPOINT=/api/login
 VITE_REGISTER_ENDPOINT=/api/register
+VITE_SESSION_ENDPOINT=/api/me
+VITE_LOGOUT_ENDPOINT=/api/logout
 VITE_ATTENDANCE_ENDPOINT=/api/absensi
 VITE_CLASSES_ENDPOINT=/api/kelas
 VITE_ATTENDANCE_HISTORY_ENDPOINT=/api/absensi/riwayat
 ```
 
-Jika route backend tidak memakai prefix `/api`, gunakan `/data_siswa` dan `/data_guru`. Restart Vite setelah mengubah konfigurasi. Konfigurasi lama `VITE_DASHBOARD_ENDPOINT` tidak digunakan lagi.
+Jika route backend tidak memakai prefix `/api`, gunakan `/data_siswa` dan `/data_guru`. Restart Vite setelah mengubah konfigurasi. Gunakan hostname yang sama untuk frontend dan backend, misalnya `localhost` pada keduanya; jangan mencampur `localhost` dengan `127.0.0.1` untuk sesi cookie. Konfigurasi lama `VITE_DASHBOARD_ENDPOINT` tidak digunakan lagi.
 
-Registrasi mengirim `POST /api/register` dengan `nama`, `username`, `type`, `password`, dan `password_confirmation`, lalu kembali ke login setelah berhasil. Kontrak request, respons, dan validasi untuk backend ada di [docs/login-page.md](docs/login-page.md#registrasi-akun).
+Registrasi mengirim `POST /api/register` dengan `nama`, `username`, `sn`, `type`, `password`, dan `password_confirmation`, lalu kembali ke login setelah berhasil. SN wajib diisi dan dikirim sebagai string agar nol di depan tetap utuh. Kontrak request, respons, dan validasi untuk backend ada di [docs/login-page.md](docs/login-page.md#registrasi-akun).
 
-Sidebar **Absensi** dan tombol **Scan Presensi** membuka halaman yang sama. Pilih masuk/pulang, tekan area scan, lalu baca nomor kartu dengan reader keyboard atau ketik SN dan tekan Enter/tombol centang. Axios mengirim `POST /api/absensi` dengan `sn` dan `jenis_absensi` memakai token sesi. Kontrak endpoint dan respons backend ada di [docs/attendance-page.md](docs/attendance-page.md).
+Sidebar **Absensi** dan tombol **Scan Presensi** membuka halaman yang sama. Pilih masuk/pulang, tekan area scan, lalu baca nomor kartu dengan reader keyboard atau ketik SN dan tekan Enter/tombol centang. Axios mengirim `POST /api/absensi` dengan `sn` dan `jenis_absensi` memakai sesi backend. Kontrak endpoint dan respons backend ada di [docs/attendance-page.md](docs/attendance-page.md).
 
 Sidebar **Riwayat Absensi** membuka daftar nama dan status kehadiran dengan filter kelas/tanggal. Axios mengambil pilihan kelas dari `GET /api/kelas` dan riwayat dari `GET /api/absensi/riwayat` dengan query `id_kelas`, `tanggal`, dan `page`. Kontrak respons, pagination, serta konfigurasi backend ada di [docs/attendance-history-page.md](docs/attendance-history-page.md).
 
@@ -63,7 +67,7 @@ Menu **Data Kelas** menyediakan pencarian nama kelas, kartu jumlah siswa/wali ke
 
 ## Menggunakan Axios
 
-Axios sudah termasuk dependency proyek. `src/services/api.js` membuat `apiClient` dengan `baseURL` dari konfigurasi, header `Accept: application/json`, dan timeout 15 detik. Endpoint siswa/guru dipanggil dengan `params: { page }` dan `signal` dari `AbortController`.
+Axios sudah termasuk dependency proyek. `src/services/api.js` membuat `apiClient` dengan `baseURL` dari konfigurasi, `withCredentials: true` untuk cookie sesi, header `Accept: application/json`, dan timeout 15 detik. Endpoint siswa/guru dipanggil dengan `params: { page }` dan `signal` dari `AbortController`.
 
 Alur datanya: `Dashbord.jsx` → `useDashboardData.js` → `dashboardApi` → backend. Hook menyimpan seluruh JSON dari `response.data` di `students.payload`/`teachers.payload`. `items` berisi record dengan semua nama field asli backend, termasuk `status`, `type`, `created_date`, `update_date`, dan field tambahan. `getPersonView` memetakan nama tampilan saat render; statistik membaca jumlah koleksi.
 
@@ -159,15 +163,11 @@ Statistik kehadiran dan ekstrakurikuler menampilkan `—` sampai sumber datanya 
 
 ## Autentikasi dan integrasi aplikasi
 
-Jika backend memakai Bearer token, interceptor Axios membaca `auth_token` dari `localStorage` pada setiap request. Simpan token dari respons login pada aplikasi:
+Backend lokal menggunakan sesi cookie CodeIgniter. Login mengirim `POST /api/login`; respons berhasil berisi `status: 200`, `redirect: "/dashboard"`, dan profil pengguna pada `data`. Browser menyimpan cookie `HttpOnly` dengan `SameSite=Lax`, lalu Axios menyertakannya melalui `withCredentials: true`. Frontend tidak membuat token atau penanda sesi palsu. Cache profil lokal tidak menjadi bukti login. Kompatibilitas Bearer tetap tersedia: bila backend mengirim token asli, interceptor membaca `auth_token` dan menambahkan `Authorization: Bearer ...`. Jangan menyimpan token login dalam variabel `VITE_*`.
 
-```js
-localStorage.setItem("auth_token", tokenDariResponsLogin);
-```
+`src/App.jsx` mengelola rute `/login`, `/register`, dan `/dashboard`, dengan helper URL di `src/routes.js`. Saat aplikasi dimuat atau `/dashboard` di-refresh, `GET /api/me` memvalidasi sesi. Pada `/` dan `/dashboard`, HTTP 401 mengarahkan ke `/login`, sedangkan koneksi gagal atau error server menampilkan pesan dan tombol coba lagi. Form `/login` dan `/register` tetap dapat dibuka saat pemeriksaan sesi berjalan atau backend tidak tersedia. Pengguna dengan sesi valid yang membuka `/` atau halaman login/registrasi diarahkan ke `/dashboard`. Tombol **Keluar** memanggil `GET /api/logout` untuk mengakhiri sesi backend sebelum kembali ke `/login`.
 
-Interceptor akan menambahkan `Authorization: Bearer ...`. Jangan menyimpan token login dalam variabel `VITE_*`. Backend perlu mengizinkan origin frontend melalui CORS, termasuk header `Authorization` dan `Accept`. Respons HTTP 401 dan 403 menghasilkan pesan sesi/akses yang sesuai. Jika backend memakai autentikasi cookie Laravel Sanctum, konfigurasi cookie/CSRF harus disesuaikan dengan alur login backend; konfigurasi saat ini menggunakan Bearer token.
-
-Tampilan dashboard, profil, daftar siswa, daftar guru, sidebar, dan modal password dikelola dalam Dashboard Page. Modul ini belum menambahkan router URL. Saat development, halaman awal menampilkan preview dashboard dan `?page=login` membuka login jika belum ada sesi. Pada hasil build, halaman awal tanpa sesi menampilkan login; token sesi yang tersedia menampilkan Dashboard Page.
+Backend perlu mengizinkan origin frontend secara eksplisit melalui CORS, mengaktifkan credentials, serta mengizinkan header `Accept` dan `Authorization` bila dipakai. Untuk deployment, hosting frontend harus meneruskan permintaan path SPA seperti `/login`, `/register`, dan `/dashboard` ke `index.html` agar akses langsung dan refresh bekerja. Endpoint API tetap dilayani backend secara terpisah.
 
 `Dashbord` menerima props opsional `schoolName`, `profile`, `onNavigate`, `onEditProfile`, dan `onLogout`. Data profil berasal dari pengguna yang sedang login, bukan dari baris pertama daftar siswa/guru. `profile` dapat menerima record backend secara langsung atau `{ data: record }`, dengan nama `nama_siswa`/`nama`, identitas `sn`, `status`, dan `type`. Props tampilan lama (`name`, `nisn`/`nig`/`nip`, `birthDate`, `address`, `phone`, `photo`) tetap didukung. Field kontak dan foto belum memiliki kontrak API yang diberikan.
 
@@ -180,4 +180,4 @@ npm test
 npm run build
 ```
 
-Tes memeriksa normalisasi respons, total pagination, data kosong, dan integrasi Axios melalui server HTTP lokal: autentikasi, parameter halaman, pembatalan, timeout, respons tidak valid, serta kegagalan satu endpoint. Backend Laravel tidak termasuk dalam repository ini.
+Tes memeriksa normalisasi respons, total pagination, data kosong, dan integrasi Axios melalui server HTTP lokal: autentikasi, parameter halaman, pembatalan, timeout, respons tidak valid, serta kegagalan satu endpoint. Kode backend dikelola dalam repository terpisah.

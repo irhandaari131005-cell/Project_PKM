@@ -1,15 +1,22 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Clock3, LoaderCircle, X } from "lucide-react";
+import { Check, Clock3, LoaderCircle, ScanLine, X } from "lucide-react";
 import {
   attendanceApi,
   ATTENDANCE_TYPES,
   getAttendanceError,
 } from "../../services/attendance.js";
+import { createCardReader, CARD_READER_DEFAULTS } from "../../services/cardReader.js";
 
 const clockFormat = new Intl.DateTimeFormat("id-ID", {
   timeZone: "Asia/Jakarta",
   hour: "2-digit",
   minute: "2-digit",
+});
+const timeFormat = new Intl.DateTimeFormat("id-ID", {
+  timeZone: "Asia/Jakarta",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
 });
 const dateFormat = new Intl.DateTimeFormat("id-ID", {
   timeZone: "Asia/Jakarta",
@@ -18,91 +25,117 @@ const dateFormat = new Intl.DateTimeFormat("id-ID", {
   month: "long",
   year: "numeric",
 });
+const MAX_LOG = 6;
+
+function isTypingTarget(target) {
+  if (!target || typeof target !== "object") return false;
+  const tag = typeof target.tagName === "string" ? target.tagName.toUpperCase() : "";
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable === true;
+}
 
 export default function Attendance() {
   const [now, setNow] = useState(() => new Date());
   const [kind, setKind] = useState("masuk");
-  const [readerOpen, setReaderOpen] = useState(false);
-  const [sn, setSn] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
-  const input = useRef(null);
-  const pendingRequest = useRef(null);
+  const [processing, setProcessing] = useState(false);
+  const [log, setLog] = useState([]);
+  const kindRef = useRef(kind);
+  const queue = useRef([]);
+  const busy = useRef(false);
+  const mounted = useRef(true);
+  const controllers = useRef(new Set());
+  const sequence = useRef(0);
 
   useEffect(() => {
+    kindRef.current = kind;
+  }, [kind]);
+
+  useEffect(() => {
+    mounted.current = true;
     const timer = window.setInterval(() => setNow(new Date()), 1000);
     return () => {
+      mounted.current = false;
       window.clearInterval(timer);
-      pendingRequest.current?.abort();
+      queue.current = [];
+      for (const controller of controllers.current) controller.abort();
     };
   }, []);
 
-  useEffect(() => {
-    if (readerOpen && !submitting) {
-      input.current?.focus({ preventScroll: true });
-      input.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  // Tap diproses satu per satu sesuai urutan; tap berikutnya (siswa B, C, ...) langsung
+  // masuk antrean tanpa perlu menekan tombol apa pun.
+  async function processQueue() {
+    if (busy.current) return;
+    busy.current = true;
+    setProcessing(true);
+    while (queue.current.length && mounted.current) {
+      const item = queue.current.shift();
+      const controller = new AbortController();
+      controllers.current.add(controller);
+      let entry;
+      try {
+        const response = await attendanceApi.submit(
+          { sn: item.sn, jenis_absensi: item.kind },
+          { signal: controller.signal },
+        );
+        const record = response.record ?? {};
+        entry = {
+          ok: true,
+          message: response.message,
+          name: record.nama_siswa ?? record.nama ?? record.user?.nama,
+          action: response.payload?.action === "check_out" || item.kind === "pulang" ? "Absen pulang" : "Absen masuk",
+        };
+      } catch (requestError) {
+        if (controller.signal.aborted) break;
+        entry = { ok: false, message: getAttendanceError(requestError).message };
+      } finally {
+        controllers.current.delete(controller);
+      }
+      if (!mounted.current) break;
+      const row = { ...entry, id: item.id, at: new Date() };
+      setLog((current) => [row, ...current].slice(0, MAX_LOG));
     }
-  }, [readerOpen, submitting]);
-
-  function startReader() {
-    if (pendingRequest.current) return;
-    setReaderOpen(true);
-    setResult(null);
-    setError(null);
-    input.current?.focus({ preventScroll: true });
+    busy.current = false;
+    if (mounted.current) setProcessing(false);
   }
 
-  function changeKind(value) {
-    if (pendingRequest.current || value === kind) return;
-    setKind(value);
-    setSn("");
-    setReaderOpen(false);
-    setResult(null);
-    setError(null);
-  }
+  useEffect(() => {
+    let idleTimer = null;
+    const reader = createCardReader((sn) => {
+      sequence.current += 1;
+      queue.current.push({ id: sequence.current, sn, kind: kindRef.current });
+      processQueue();
+    });
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-    if (pendingRequest.current) return;
-    const controller = new AbortController();
-    pendingRequest.current = controller;
-    setSubmitting(true);
-    setError(null);
-    setResult(null);
-    try {
-      const response = await attendanceApi.submit(
-        { sn, jenis_absensi: kind },
-        { signal: controller.signal },
-      );
-      if (controller.signal.aborted) return;
-      setResult(response);
-      setSn("");
-      setReaderOpen(false);
-    } catch (requestError) {
-      if (!controller.signal.aborted)
-        setError(getAttendanceError(requestError));
-    } finally {
-      if (!controller.signal.aborted) {
-        pendingRequest.current = null;
-        setSubmitting(false);
+    function onKeyDown(event) {
+      // Jangan ganggu kolom input lain (mis. modal ganti password di dashboard).
+      if (event.defaultPrevented || event.isComposing || isTypingTarget(event.target)) return;
+      if (reader.handleKey(event, Date.now())) {
+        event.preventDefault();
+        window.clearTimeout(idleTimer);
+        idleTimer = window.setTimeout(
+          () => reader.flushIfIdle(Date.now()),
+          CARD_READER_DEFAULTS.idleSubmitMs + 20,
+        );
       }
     }
-  }
 
-  const status = submitting
-    ? "Menyimpan absensi..."
-    : result
-      ? "Absensi berhasil!"
-      : error
-        ? "Absensi belum berhasil"
-        : readerOpen
-          ? "Tempelkan kartu Anda"
-          : "Siap untuk absen?";
-  const personName =
-    result?.record?.nama_siswa ??
-    result?.record?.nama ??
-    result?.record?.user?.nama;
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.clearTimeout(idleTimer);
+    };
+    // processQueue hanya memakai ref, jadi listener cukup dipasang sekali.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const latest = log[0];
+  const status = processing
+    ? "Memproses kartu..."
+    : latest
+      ? latest.ok
+        ? "Absensi berhasil!"
+        : "Absensi belum berhasil"
+      : "Tempelkan kartu Anda";
+  const kindLabel = ATTENDANCE_TYPES.find(({ value }) => value === kind)?.label ?? "";
 
   return (
     <section aria-labelledby="attendance-title" className="pb-2 text-[#003D32]">
@@ -130,31 +163,21 @@ export default function Attendance() {
             key={value}
             type="button"
             aria-pressed={kind === value}
-            disabled={submitting}
-            onClick={() => changeKind(value)}
-            className={`min-h-12 rounded-xl border-2 border-[#003D32] px-2 py-3 text-[13px] font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:opacity-60 ${kind === value ? "bg-[#003D32] text-white" : "bg-white text-[#003D32] hover:bg-emerald-50"}`}
+            onClick={() => setKind(value)}
+            className={`min-h-12 rounded-xl border-2 border-[#003D32] px-2 py-3 text-[13px] font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${kind === value ? "bg-[#003D32] text-white" : "bg-white text-[#003D32] hover:bg-emerald-50"}`}
           >
             {label}
           </button>
         ))}
       </div>
 
-      <form
-        onSubmit={handleSubmit}
-        aria-busy={submitting}
-        className="mx-8 mt-6 text-center min-[380px]:mt-8"
-      >
-        <button
-          type="button"
-          onClick={startReader}
-          disabled={submitting}
-          aria-label="Aktifkan pembaca kartu absensi"
-          aria-expanded={readerOpen}
-          aria-controls="attendance-reader"
-          className="flex aspect-square w-full items-center justify-center rounded-[12px] rounded-tr-[38px] border-[3px] border-[#002d24] bg-[#003D32] p-7 transition hover:bg-[#004c3e] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-4 disabled:cursor-wait"
+      <div aria-busy={processing} className="mx-8 mt-6 text-center min-[380px]:mt-8">
+        <div
+          aria-hidden="true"
+          className="flex aspect-square w-full items-center justify-center rounded-[12px] rounded-tr-[38px] border-[3px] border-[#002d24] bg-[#003D32] p-7"
         >
           <ScannerIllustration />
-        </button>
+        </div>
 
         <p
           aria-live="polite"
@@ -162,101 +185,53 @@ export default function Attendance() {
         >
           {status}
         </p>
-        <button
-          type="submit"
-          onClick={(event) => {
-            if (!readerOpen) {
-              event.preventDefault();
-              startReader();
-            }
-          }}
-          disabled={submitting}
-          aria-label={readerOpen ? `Kirim absensi ${kind}` : "Mulai scan kartu"}
-          className={`mx-auto mt-3 flex h-[60px] w-[60px] items-center justify-center rounded-full border-2 border-[#003D32] bg-white p-[3px] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-wait min-[380px]:mt-4 min-[380px]:h-[66px] min-[380px]:w-[66px] ${error ? "border-red-700" : ""}`}
+        <div
+          aria-hidden="true"
+          className={`mx-auto mt-3 flex h-[60px] w-[60px] items-center justify-center rounded-full border-2 bg-white p-[3px] min-[380px]:mt-4 min-[380px]:h-[66px] min-[380px]:w-[66px] ${latest && !latest.ok && !processing ? "border-red-700" : "border-[#003D32]"}`}
         >
           <span
-            className={`flex h-full w-full items-center justify-center rounded-full text-white ${error ? "bg-red-700" : "bg-[#003D32]"}`}
+            className={`flex h-full w-full items-center justify-center rounded-full text-white ${latest && !latest.ok && !processing ? "bg-red-700" : "bg-[#003D32]"}`}
           >
-            {submitting ? (
+            {processing ? (
               <LoaderCircle size={34} className="animate-spin" />
-            ) : error ? (
-              <X size={34} strokeWidth={1.5} />
-            ) : (
+            ) : !latest ? (
+              <ScanLine size={32} strokeWidth={1.5} />
+            ) : latest.ok ? (
               <Check size={36} strokeWidth={1.5} />
+            ) : (
+              <X size={34} strokeWidth={1.5} />
             )}
           </span>
-        </button>
+        </div>
         <p className="mt-3 text-[12px] min-[380px]:mt-4">
-          Pastikan TAP kartu dengan tepat!
+          Mode <strong>{kindLabel}</strong> aktif. Pastikan TAP kartu dengan tepat!
+        </p>
+        <p className="mt-1 text-[11px] text-slate-600">
+          Siswa berikutnya bisa langsung tap tanpa menekan tombol apa pun.
         </p>
 
-        <div
-          id="attendance-reader"
-          hidden={!readerOpen}
-          className="mt-5 text-left"
-        >
-          <label
-            htmlFor="attendance-sn"
-            className="mb-2 block text-xs font-semibold"
-          >
-            Nomor kartu (SN)
-          </label>
-          <input
-            ref={input}
-            id="attendance-sn"
-            name="sn"
-            type="text"
-            autoComplete="off"
-            autoCapitalize="none"
-            spellCheck={false}
-            required={readerOpen}
-            disabled={!readerOpen || submitting}
-            value={sn}
-            onChange={(event) => setSn(event.target.value)}
-            aria-invalid={Boolean(error?.fields.sn)}
-            aria-describedby={`attendance-reader-hint${error?.fields.sn ? " attendance-sn-error" : ""}`}
-            placeholder="Tempelkan kartu atau ketik nomor"
-            className="h-12 w-full rounded-lg border border-emerald-800/30 bg-emerald-50/50 px-3 text-base text-[#003D32] outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20 disabled:opacity-60"
-          />
-          <p
-            id="attendance-reader-hint"
-            className="mt-2 text-[11px] leading-relaxed text-slate-600"
-          >
-            Gunakan reader kartu, lalu tekan Enter atau tombol centang untuk
-            mengirim.
-          </p>
-          {error?.fields.sn && (
-            <p id="attendance-sn-error" className="mt-1 text-xs text-red-700">
-              {error.fields.sn}
-            </p>
-          )}
-          {error?.fields.jenis_absensi && (
-            <p className="mt-1 text-xs text-red-700">
-              {error.fields.jenis_absensi}
-            </p>
-          )}
-        </div>
-
-        {error && (
-          <p
-            role="alert"
-            className="mt-4 rounded-lg bg-red-50 p-3 text-xs leading-relaxed text-red-800"
-          >
-            {error.message}
-          </p>
+        {log.length > 0 && (
+          <ol aria-label="Hasil tap terakhir" className="mt-4 space-y-2 text-left">
+            {log.map((entry, index) => (
+              <li
+                key={entry.id}
+                role={index === 0 ? (entry.ok ? "status" : "alert") : undefined}
+                className={`rounded-lg p-3 text-xs leading-relaxed ${entry.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"} ${index === 0 ? "" : "opacity-70"}`}
+              >
+                <p className="flex items-center justify-between gap-2">
+                  <span className="font-semibold">
+                    {entry.ok ? (typeof entry.name === "string" ? entry.name : entry.action) : "Gagal"}
+                  </span>
+                  <time dateTime={entry.at.toISOString()} className="shrink-0 tabular-nums">
+                    {timeFormat.format(entry.at)}
+                  </time>
+                </p>
+                <p className="mt-0.5">{entry.ok ? `${entry.action} — ${entry.message}` : entry.message}</p>
+              </li>
+            ))}
+          </ol>
         )}
-        {result && (
-          <div
-            role="status"
-            className="mt-4 rounded-lg bg-emerald-50 p-3 text-xs leading-relaxed text-emerald-900"
-          >
-            <p>{result.message}</p>
-            {typeof personName === "string" && (
-              <p className="mt-1 font-semibold">{personName}</p>
-            )}
-          </div>
-        )}
-      </form>
+      </div>
     </section>
   );
 }

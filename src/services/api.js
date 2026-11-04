@@ -8,6 +8,7 @@ const TEACHERS_ENDPOINT = env.VITE_DATA_GURU_ENDPOINT || "/api/data_guru";
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
+  withCredentials: true,
   headers: { Accept: "application/json" },
   responseType: "json",
   transitional: { silentJSONParsing: false },

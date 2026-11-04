@@ -7,7 +7,7 @@ const loaders = {
   data_guru: dashboardApi.getTeachers,
 };
 
-function useCollection(resource) {
+function useCollection(resource, enabled = true) {
   const [page, setPage] = useState(1);
   const [revision, setRevision] = useState(0);
   const [state, setState] = useState({
@@ -15,6 +15,10 @@ function useCollection(resource) {
   });
 
   useEffect(() => {
+    if (!enabled) {
+      setState({ payload: null, items: [], total: null, currentPage: 1, lastPage: 1, loading: false, error: "" });
+      return;
+    }
     const controller = new AbortController();
     setState((previous) => ({ ...previous, loading: true, error: "" }));
 
@@ -43,7 +47,7 @@ function useCollection(resource) {
 
     load();
     return () => controller.abort();
-  }, [resource, page, revision]);
+  }, [resource, page, revision, enabled]);
 
   function reload() {
     setRevision((previous) => previous + 1);
@@ -57,9 +61,9 @@ function useCollection(resource) {
   return { ...state, setPage: goToPage, reload };
 }
 
-export default function useDashboardData() {
+export default function useDashboardData({ includeTeachers = false } = {}) {
   // Keduanya berjalan bersamaan; kegagalan satu endpoint tidak menghapus hasil lainnya.
   const students = useCollection("data_siswa");
-  const teachers = useCollection("data_guru");
+  const teachers = useCollection("data_guru", includeTeachers);
   return { students, teachers };
 }

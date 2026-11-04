@@ -20,7 +20,7 @@ const initialList = {
   key: "",
 };
 
-export default function Teachers({ onTeacherCreated }) {
+export default function Teachers({ onTeacherCreated, canManage = false }) {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({ search: "", page: 1 });
   const [list, setList] = useState(initialList);
@@ -139,7 +139,7 @@ export default function Teachers({ onTeacherCreated }) {
             {visible.error.fields.search}
           </p>
         )}
-        <button
+        {canManage && <button
           type="button"
           aria-label="Tambah data guru"
           onClick={() => {
@@ -150,7 +150,7 @@ export default function Teachers({ onTeacherCreated }) {
         >
           <Plus size={14} />
           Data Guru
-        </button>
+        </button>}
       </div>
 
       <div className="mx-3 mt-2 min-[380px]:mt-3">
@@ -236,7 +236,7 @@ export default function Teachers({ onTeacherCreated }) {
           </nav>
         )}
       </div>
-      {createOpen && (
+      {canManage && createOpen && (
         <CreateTeacherModal
           onClose={() => setCreateOpen(false)}
           onCreated={teacherCreated}

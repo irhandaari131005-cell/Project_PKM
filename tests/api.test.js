@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import axios from "axios";
 import { apiClient, dashboardApi, request } from "../src/services/api.js";
-import { authApi, normalizeLoginResponse } from "../src/services/auth.js";
+import { authApi, getRegisterError, normalizeLoginResponse } from "../src/services/auth.js";
 import { attendanceApi } from "../src/services/attendance.js";
 
 const originalBaseURL = apiClient.defaults.baseURL;
@@ -11,6 +11,12 @@ const originalProxy = apiClient.defaults.proxy;
 const originalStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
 let receivedRequests = [];
 let studentsStatus = 200;
+let loginStatus;
+let loginPayload;
+let sessionStatus;
+let sessionPayload;
+let logoutStatus;
+let logoutPayload;
 let registerStatus = 201;
 let registerPayload;
 let token = null;
@@ -25,6 +31,12 @@ const server = createServer((incoming, response) => {
   const received = { url, method: incoming.method, headers: incoming.headers };
   receivedRequests.push(received);
   response.setHeader("Content-Type", "application/json");
+
+  if (url.pathname === "/api/me" || url.pathname === "/api/logout") {
+    response.statusCode = url.pathname === "/api/me" ? sessionStatus : logoutStatus;
+    response.end(JSON.stringify(url.pathname === "/api/me" ? sessionPayload : logoutPayload));
+    return;
+  }
 
   if (url.pathname === "/api/absensi") {
     let body = "";
@@ -58,11 +70,8 @@ const server = createServer((incoming, response) => {
     incoming.on("data", (chunk) => { body += chunk; });
     incoming.on("end", () => {
       received.body = JSON.parse(body);
-      response.end(JSON.stringify({
-        status: 200,
-        message: "Login berhasil",
-        data: { token: "test-login-token", user: { id_guru: "1", nama: "Budi", sn: "001", type: "guru" } },
-      }));
+      response.statusCode = loginStatus;
+      response.end(JSON.stringify(loginPayload));
     });
     return;
   }
@@ -104,8 +113,15 @@ before(async () => {
 beforeEach(() => {
   receivedRequests = [];
   studentsStatus = 200;
+  const user = { id_user: 1, username: "budi", nama: "Budi", type: "guru" };
+  loginStatus = 200;
+  loginPayload = { status: 200, message: "Login berhasil", redirect: "/dashboard", data: user };
+  sessionStatus = 200;
+  sessionPayload = { status: 200, message: "User terautentikasi", data: user };
+  logoutStatus = 200;
+  logoutPayload = { status: 200, message: "Logout berhasil", redirect: "/login" };
   registerStatus = 201;
-  registerPayload = { status: 201, message: "Registrasi berhasil", data: { user: { nama: "Budi" } } };
+  registerPayload = { status: 201, message: "Registrasi berhasil", redirect: "/login" };
   token = null;
   slowRequestStarted = undefined;
   attendanceStatus = 201;
@@ -175,12 +191,65 @@ test("login mengirim payload JSON melalui POST tanpa token sesi sebelumnya", asy
   assert.equal(incoming.headers.authorization, undefined);
   assert.deepEqual(incoming.body, { username: "guru", password: " secret ", type: "guru" });
   const session = normalizeLoginResponse(payload);
-  assert.equal(session.token, "test-login-token");
-  assert.equal(session.user.sn, "001");
+  assert.equal(session.token, null);
+  assert.deepEqual(session.user, { id_user: 1, username: "budi", nama: "Budi", type: "guru" });
+  assert.equal(payload.redirect, "/dashboard");
+  assert.equal(apiClient.defaults.withCredentials, true);
+});
+
+test("respons login Bearer lama tetap dapat dinormalisasi", async () => {
+  loginPayload = { status: 200, data: { token: "test-login-token", user: { nama: "Budi", sn: "001" } } };
+  const payload = await authApi.login({ username: "budi", password: "secret", type: "guru" });
+  assert.equal(normalizeLoginResponse(payload).token, "test-login-token");
+});
+
+test("pemeriksaan sesi dan logout memakai GET dengan dukungan cookie tanpa mengirim kredensial form", async () => {
+  const configs = [];
+  const interceptor = apiClient.interceptors.request.use((config) => {
+    configs.push(config);
+    return config;
+  });
+  try {
+    const session = await authApi.me();
+    assert.deepEqual(session, { token: null, user: sessionPayload.data, payload: sessionPayload });
+    assert.equal(await authApi.logout().then((payload) => payload.redirect), "/login");
+    assert.deepEqual(receivedRequests.map(({ url }) => url.pathname), ["/api/me", "/api/logout"]);
+    for (const incoming of receivedRequests) {
+      assert.equal(incoming.method, "GET");
+      assert.equal(incoming.headers.authorization, undefined);
+      assert.equal(incoming.body, undefined);
+      assert.equal(incoming.url.search, "");
+    }
+    assert.ok(configs.every((config) => config.withCredentials === true));
+  } finally {
+    apiClient.interceptors.request.eject(interceptor);
+  }
+});
+
+test("login HTTP 400 dan sesi HTTP 401 tetap gagal, sementara gangguan sesi 500 diteruskan", async () => {
+  loginStatus = 400;
+  loginPayload = { status: 400, message: "Username/password salah" };
+  await assert.rejects(authApi.login({ username: "budi", password: "salah", type: "guru" }),
+    (error) => error.response.status === 400);
+  sessionStatus = 401;
+  sessionPayload = { status: 401, message: "Silakan login terlebih dahulu", redirect: "/login" };
+  await assert.rejects(authApi.me(), (error) => error.response.status === 401);
+  sessionStatus = 500;
+  sessionPayload = { status: 500, message: "Terjadi kesalahan pada server" };
+  await assert.rejects(authApi.me(), (error) => error.response.status === 500);
+});
+
+test("pemeriksaan sesi dan logout menolak status gagal meskipun HTTP 200", async () => {
+  sessionPayload = { status: 401, data: { id_user: 1 } };
+  await assert.rejects(authApi.me(), (error) => error.response.status === 401);
+  logoutPayload = { success: false };
+  await assert.rejects(authApi.logout(), (error) => error.response.status === 401);
+  sessionPayload = { status: 200, data: [] };
+  await assert.rejects(authApi.me(), /profil/);
 });
 
 const registration = {
-  nama: " Budi ", username: " guru ", type: "guru",
+  nama: " Budi ", username: " guru ", sn: " 000123 ", type: "guru",
   password: " secret123 ", password_confirmation: " secret123 ",
 };
 
@@ -193,28 +262,44 @@ test("registrasi mengirim POST /api/register sebagai JSON tanpa Bearer token lam
   assert.match(incoming.headers["content-type"], /application\/json/);
   assert.equal(incoming.headers.accept, "application/json");
   assert.equal(incoming.headers.authorization, undefined);
-  assert.deepEqual(incoming.body, { ...registration, nama: "Budi", username: "guru" });
+  assert.deepEqual(incoming.body, { ...registration, nama: "Budi", username: "guru", sn: "000123" });
   assert.equal(payload.status, 201);
-  assert.equal(payload.data.user.nama, "Budi");
+  assert.equal(payload.redirect, "/login");
 });
 
 test("validasi registrasi gagal sebelum request dikirim", async () => {
   await assert.rejects(authApi.register({ ...registration, password_confirmation: "berbeda" }),
     (error) => error.status === 422);
+  await assert.rejects(authApi.register({ ...registration, sn: " " }),
+    (error) => error.status === 422 && getRegisterError(error).fields.sn === "SN wajib diisi.");
+  await assert.rejects(authApi.register({ ...registration, type: "wali_murid" }),
+    (error) => error.status === 422 && Boolean(getRegisterError(error).fields.type));
   assert.equal(receivedRequests.length, 0);
 });
 
 test("endpoint registrasi meneruskan validasi HTTP dan menolak error JSON pada HTTP 200", async () => {
-  const errors = { username: ["Username sudah digunakan."] };
+  const errors = { username: ["Username sudah digunakan."], sn: ["SN sudah digunakan."] };
   for (const httpStatus of [422, 200]) {
     registerStatus = httpStatus;
     registerPayload = { status: 422, message: "Data tidak valid", errors };
     await assert.rejects(authApi.register(registration), (error) => {
       assert.equal(error.response.status, 422);
       assert.deepEqual(error.response.data.errors, errors);
+      assert.equal(getRegisterError(error).fields.sn, "SN sudah digunakan.");
       return true;
     });
   }
+});
+
+test("kegagalan penyimpanan backend tidak dianggap registrasi berhasil", async () => {
+  registerStatus = 500;
+  registerPayload = { status: 500, message: "Terjadi kesalahan pada server" };
+  await assert.rejects(authApi.register(registration), (error) => {
+    assert.equal(error.response.status, 500);
+    assert.match(getRegisterError(error).message, /Server gagal memproses pendaftaran/);
+    return true;
+  });
+  assert.equal(receivedRequests[0].body.id_user, undefined);
 });
 
 test("registrasi mendukung pembatalan melalui AbortSignal", async () => {

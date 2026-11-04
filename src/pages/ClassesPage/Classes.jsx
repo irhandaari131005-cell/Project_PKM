@@ -31,7 +31,7 @@ const countLabel = (count) =>
 const inputClass =
   "h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-base outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20";
 
-export default function Classes() {
+export default function Classes({ canManage = false }) {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({ search: "", page: 1 });
   const [list, setList] = useState(initialList);
@@ -80,6 +80,7 @@ export default function Classes() {
       ? list
       : initialList;
   function open(mode, id) {
+    if (mode !== "detail" && !canManage) return;
     setSuccess("");
     setDialog({ mode, id });
   }
@@ -139,14 +140,14 @@ export default function Classes() {
             {visible.error.fields.search}
           </p>
         )}
-        <button
+        {canManage && <button
           type="button"
           aria-label="Tambah data kelas"
           onClick={() => open("create")}
           className="mt-1 flex h-9 w-full items-center justify-center gap-1 rounded-lg border border-emerald-900 bg-white text-[11px] font-semibold hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 min-[380px]:text-xs"
         >
           Tambah Data Kelas <Plus size={12} aria-hidden="true" />
-        </button>
+        </button>}
       </div>
       <div className="mx-3 mt-2">
         {success && (
@@ -183,7 +184,7 @@ export default function Classes() {
                     key={item.id}
                     item={item}
                     onDetail={() => open("detail", item.id)}
-                    onEdit={() => open("edit", item.id)}
+                    onEdit={canManage ? () => open("edit", item.id) : undefined}
                   />
                 );
               })}
@@ -227,8 +228,9 @@ export default function Classes() {
           </nav>
         )}
       </div>
-      {dialog && (
+      {dialog && (canManage || dialog.mode === "detail") && (
         <ClassModal
+          canManage={canManage}
           initialMode={dialog.mode}
           id={dialog.id}
           onClose={() => setDialog(null)}
@@ -277,7 +279,7 @@ function ClassCard({ item, onDetail, onEdit }) {
           <Eye size={14} aria-hidden="true" />
           Detail
         </button>
-        <button
+        {onEdit && <button
           type="button"
           aria-label={`Edit kelas ${item.name}`}
           onClick={onEdit}
@@ -285,7 +287,7 @@ function ClassCard({ item, onDetail, onEdit }) {
         >
           <Pencil size={13} aria-hidden="true" />
           Edit
-        </button>
+        </button>}
       </div>
     </li>
   );
@@ -322,7 +324,7 @@ function RequestError({ message, onRetry }) {
   );
 }
 
-function ClassModal({ initialMode, id, onClose, onSaved }) {
+function ClassModal({ initialMode, id, onClose, onSaved, canManage = false }) {
   const [mode, setMode] = useState(initialMode);
   const [record, setRecord] = useState(null);
   const [values, setValues] = useState({ nama_kelas: "", id_wali_kelas: "" });
@@ -455,6 +457,7 @@ function ClassModal({ initialMode, id, onClose, onSaved }) {
 
   async function submit(event) {
     event.preventDefault();
+    if (!canManage) return;
     if (
       pending.current ||
       detail.loading ||
@@ -555,14 +558,14 @@ function ClassModal({ initialMode, id, onClose, onSaved }) {
                 </dd>
               </div>
             </dl>
-            <button
+            {canManage && <button
               type="button"
               onClick={() => setMode("edit")}
               className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-[#005343] px-4 py-3 text-sm text-white hover:bg-[#003D32]"
             >
               <Pencil size={15} aria-hidden="true" />
               Edit kelas
-            </button>
+            </button>}
           </>
         ) : (
           <form onSubmit={submit} aria-busy={submitting}>

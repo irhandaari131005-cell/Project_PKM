@@ -70,11 +70,13 @@ export function getAttendanceError(error) {
       if (typeof message === "string") fields[field] = message;
     }
   }
+  // Untuk kartu/absensi, pesan server paling jelas (mis. "Andi sudah absen pulang hari ini.").
+  const serverMessage = typeof error.response?.data?.message === "string" ? error.response.data.message.trim() : "";
   let message = "Absensi belum dapat disimpan. Silakan coba lagi.";
   if (status === 401) message = "Sesi berakhir. Silakan login kembali.";
   else if (status === 403) message = "Anda tidak memiliki izin untuk melakukan absensi.";
-  else if (status === 404) message = "Data presensi atau kartu tidak ditemukan.";
-  else if (status === 409) message = "Absensi ini sudah tercatat. Tidak perlu mengirim ulang.";
+  else if (status === 404) message = serverMessage || "Data presensi atau kartu tidak ditemukan.";
+  else if (status === 409) message = serverMessage || "Absensi ini sudah tercatat. Tidak perlu mengirim ulang.";
   else if (status === 422) message = fields.sn || fields.jenis_absensi || "Periksa kembali data absensi Anda.";
   else if (status === 429) message = "Terlalu banyak percobaan. Silakan tunggu sebentar.";
   else if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") {

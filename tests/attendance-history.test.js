@@ -52,12 +52,14 @@ test("data kosong valid dibedakan dari respons rusak dan kegagalan JSON", () => 
 
 test("nama dan status kehadiran dipetakan tanpa menganggap record kosong sebagai hadir", () => {
   assert.deepEqual(getHistoryRow({ id_absensi: "001", nama_siswa: "Akbar", status_kehadiran: "HADIR" }), {
-    id: "001", name: "Akbar", status: "Hadir",
+    id: "001", name: "Akbar", className: "Belum ada kelas", status: "Hadir",
   });
   assert.equal(getHistoryRow({ siswa: { nama_siswa: "Irhanda" }, status: "izin" }).name, "Irhanda");
   assert.equal(getHistoryRow({ status: "izin" }).status, "Izin");
   assert.equal(getHistoryRow({ status: "ACTIVE" }).status, "ACTIVE");
   assert.equal(getHistoryRow({}).status, "—");
+  assert.equal(getHistoryRow({ nama_kelas: "X RPL 1" }).className, "X RPL 1");
+  assert.equal(getHistoryRow({ kelas: { nama_kelas: "XI TKJ 1" } }).className, "XI TKJ 1");
 });
 
 test("error riwayat memetakan validasi dan membedakan autentikasi, izin, serta timeout", () => {

@@ -22,7 +22,7 @@ const initialList = {
   key: "",
 };
 
-export default function Students({ initialTotal = null, onStudentCreated }) {
+export default function Students({ initialTotal = null, onStudentCreated, canManage = false }) {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({ search: "", page: 1 });
   const [list, setList] = useState(initialList);
@@ -177,7 +177,7 @@ export default function Students({ initialTotal = null, onStudentCreated }) {
             {visible.error.fields.search}
           </p>
         )}
-        <button
+        {canManage && <button
           type="button"
           aria-label="Tambah data siswa"
           onClick={() => {
@@ -188,7 +188,7 @@ export default function Students({ initialTotal = null, onStudentCreated }) {
         >
           <Plus size={14} />
           Data Siswa
-        </button>
+        </button>}
         <dl className="mt-1 grid grid-cols-2 gap-1.5 min-[380px]:mt-1.5">
           <SummaryCount label="Total Siswa" value={totalStudents} />
           <SummaryCount label="Total Kelas" value={totalClasses} />
@@ -285,7 +285,7 @@ export default function Students({ initialTotal = null, onStudentCreated }) {
           </nav>
         )}
       </div>
-      {createOpen && (
+      {canManage && createOpen && (
         <CreateStudentModal
           classes={classes}
           onRetryClasses={() => setClassesRevision((previous) => previous + 1)}

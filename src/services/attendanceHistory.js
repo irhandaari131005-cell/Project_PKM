@@ -2,7 +2,7 @@ import { request } from "./api.js";
 
 const env = import.meta.env ?? {};
 const HISTORY_ENDPOINT = env.VITE_ATTENDANCE_HISTORY_ENDPOINT || "/api/absensi/riwayat";
-const CLASSES_ENDPOINT = env.VITE_CLASSES_ENDPOINT || "/api/kelas";
+const CLASSES_ENDPOINT = env.VITE_DATA_KELAS_ENDPOINT || env.VITE_CLASSES_ENDPOINT || "/api/data_kelas";
 
 export const HISTORY_FILTER_FIELDS = Object.freeze({ id_kelas: "id_kelas", tanggal: "tanggal", page: "page" });
 const jakartaDate = new Intl.DateTimeFormat("en-CA", {
@@ -85,6 +85,7 @@ export function getHistoryRow(record) {
   return {
     id: textValue(record.id_absensi ?? record.id ?? record.id_siswa ?? record.sn),
     name: textValue(record.nama_siswa ?? record.nama ?? record.siswa?.nama_siswa ?? record.siswa?.nama) || "—",
+    className: textValue(record.nama_kelas ?? record.kelas?.nama_kelas ?? record.siswa?.kelas?.nama_kelas) || "Belum ada kelas",
     status: labels[status.toLowerCase().trim()] || status || "—",
   };
 }

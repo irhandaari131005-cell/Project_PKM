@@ -36,6 +36,7 @@ import Students from "../StudentsPage/Students.jsx";
 import Teachers from "../TeachersPage/Teachers.jsx";
 import Classes from "../ClassesPage/Classes.jsx";
 import { createDashboardData, getProfileView } from "./dashboardData.js";
+import { canManageSchoolData, canOpenDashboardView } from "../../services/access.js";
 
 const localViews = new Set([
   "dashboard",
@@ -54,7 +55,8 @@ export default function Dashbord({
   onEditProfile,
   onLogout,
 }) {
-  const { students, teachers } = useDashboardData();
+  const canManage = canManageSchoolData(profile);
+  const { students, teachers } = useDashboardData({ includeTeachers: canOpenDashboardView(profile, "data_guru") });
   const [active, setActive] = useState("dashboard");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
@@ -93,6 +95,7 @@ export default function Dashbord({
   function handleNavigate(key) {
     setIsSidebarOpen(false);
     const view = key === "scan" ? "attendance" : key;
+    if (!canOpenDashboardView(profile, view)) return;
     if (localViews.has(view)) setActive(view);
     else dispatchNavigation(key);
   }
@@ -132,7 +135,7 @@ export default function Dashbord({
       <div
         className={`relative z-10 mx-3 -mt-24 min-h-[calc(100dvh-54px)] rounded-t-[24px] bg-white pb-28 sm:min-h-[790px] ${["attendance", "attendance-history", "data_siswa", "data_guru", "classes"].includes(active) ? "px-0 pt-0" : "px-3 pt-4"}`}
       >
-        {active === "attendance" && <Attendance />}
+        {active === "attendance" && canManage && <Attendance />}
         {active === "attendance-history" && <AttendanceHistory />}
         {active === "dashboard" && (
           <>
@@ -156,6 +159,7 @@ export default function Dashbord({
         {active === "account" && (
           <Profile
             profile={profile}
+            canManage={canManage}
             onEditProfile={
               onEditProfile || (() => dispatchNavigation("edit-profile"))
             }
@@ -163,17 +167,18 @@ export default function Dashbord({
         )}
         {active === "data_siswa" && (
           <Students
+            canManage={canManage}
             initialTotal={students.total}
             onStudentCreated={students.reload}
           />
         )}
         {active === "data_guru" && (
-          <Teachers onTeacherCreated={teachers.reload} />
+          <Teachers canManage={canManage} onTeacherCreated={teachers.reload} />
         )}
-        {active === "classes" && <Classes />}
+        {active === "classes" && <Classes canManage={canManage} />}
       </div>
 
-      <BottomNavigation active={active} onNavigate={handleNavigate} />
+      <BottomNavigation profile={profile} active={active} onNavigate={handleNavigate} />
     </main>
   );
 }
@@ -347,7 +352,7 @@ function Sidebar({
 
         {/* Daftar menu */}
         <nav className="flex-1 space-y-1.5 overflow-y-auto px-2 py-2">
-          {menuItems.map(({ key, label, Icon }) => (
+          {menuItems.filter(({ key }) => canOpenDashboardView(profile, key)).map(({ key, label, Icon }) => (
             <button
               key={key}
               type="button"
@@ -385,7 +390,7 @@ function Sidebar({
             <span className="text-[10px] font-semibold">
               {getProfileView(profile).name || "Admin"}
               <span className="block text-[8px] font-normal">
-                Admin-Sekolah
+                {profile?.type === "guru" ? "Guru" : "Siswa"}
               </span>
             </span>
           </button>
@@ -603,7 +608,7 @@ function ChangePasswordModal({ open, onClose }) {
   );
 }
 
-function Profile({ profile = {}, onEditProfile }) {
+function Profile({ profile = {}, onEditProfile, canManage = false }) {
   const [failedPhoto, setFailedPhoto] = useState(null);
   const user = getProfileView(profile);
 
@@ -674,7 +679,7 @@ function Profile({ profile = {}, onEditProfile }) {
       </section>
 
       {/* Tombol edit profil */}
-      <button
+      {canManage && <button
         type="button"
         onClick={onEditProfile}
         className="mt-6 w-full
@@ -685,7 +690,7 @@ function Profile({ profile = {}, onEditProfile }) {
       >
         <Pencil size={11} />
         Edit Profil
-      </button>
+      </button>}
     </section>
   );
 }
@@ -733,7 +738,7 @@ function StatisticsGrid({ stats }) {
   return (
     <section
       aria-label="Ringkasan statistik"
-      className="rounded-xl bg-school-900 p-2.5 shadow-card"
+      className="rounded-xl bg-school-900 p-2 shadow-card"
     >
       <div className="grid grid-cols-2 gap-2">
         {statOrder.map((key) => (
@@ -809,14 +814,14 @@ const navItems = [
   { key: "account", label: "Akun", Icon: UserRound },
 ];
 
-function BottomNavigation({ active = "dashboard", onNavigate }) {
+function BottomNavigation({ active = "dashboard", onNavigate, profile }) {
   return (
     <nav
       aria-label="Navigasi utama"
       className="safe-bottom fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-[430px] border-t border-slate-200 bg-white px-1 pb-1 pt-1 shadow-[0_-3px_15px_rgba(0,0,0,0.5)] sm:sticky"
     >
-      <div className="grid h-[45px] grid-cols-5 items-end ">
-        {navItems.map(({ key, label, sublabel, Icon, featured }) => {
+      <div className={`grid h-[45px] items-end ${canManageSchoolData(profile) ? "grid-cols-5" : "grid-cols-4"}`}>
+        {navItems.filter(({ key }) => canOpenDashboardView(profile, key === "scan" ? "attendance" : key)).map(({ key, label, sublabel, Icon, featured }) => {
           if (featured) {
             return (
               <button

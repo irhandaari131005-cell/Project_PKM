@@ -235,15 +235,17 @@ export default function AttendanceHistory() {
               , {dateLabel}
             </caption>
             <colgroup>
-              <col className="w-[12%]" />
-              <col className="w-[65%]" />
-              <col className="w-[23%]" />
+              <col className="w-[9%]" />
+              <col className="w-[38%]" />
+              <col className="w-[25%]" />
+              <col className="w-[28%]" />
             </colgroup>
-            <thead className="sr-only">
+            <thead className="text-[11px] text-[#003D32] min-[380px]:text-[12px]">
               <tr>
-                <th scope="col">Nomor</th>
+                <th scope="col" aria-label="Nomor">No.</th>
                 <th scope="col">Nama siswa</th>
-                <th scope="col">Status kehadiran</th>
+                <th scope="col">Kelas</th>
+                <th scope="col" className="pr-1 text-right">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -256,6 +258,9 @@ export default function AttendanceHistory() {
                     </td>
                     <td className="break-words py-1 pr-2 align-top">
                       {row.name}
+                    </td>
+                    <td className="break-words py-1 pr-2 align-top text-[12px] min-[380px]:text-[13px]">
+                      {row.className}
                     </td>
                     <td className="break-words py-1 pr-1 text-right align-top">
                       {row.status}

@@ -52,3 +52,11 @@ test("pesan error absensi membedakan sesi, izin, duplikat, koneksi, dan timeout"
   assert.match(getAttendanceError({ code: "ERR_NETWORK" }).message, /koneksi/);
   assert.match(getAttendanceError({ code: "ECONNABORTED" }).message, /belum merespons/);
 });
+
+test("pesan 404/409 dari server ditampilkan apa adanya agar petugas tahu siswa mana yang bermasalah", () => {
+  assert.equal(getAttendanceError({ response: { status: 409, data: { message: "Andi sudah absen pulang hari ini." } } }).message,
+    "Andi sudah absen pulang hari ini.");
+  assert.equal(getAttendanceError({ response: { status: 404, data: { message: "Kartu RFID belum terdaftar pada data siswa." } } }).message,
+    "Kartu RFID belum terdaftar pada data siswa.");
+  assert.match(getAttendanceError({ response: { status: 409, data: { message: "  " } } }).message, /sudah tercatat/);
+});

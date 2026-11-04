@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { LoaderCircle, MapPin } from "lucide-react";
+import { APP_ROUTES } from "../../routes.js";
 import {
   authApi,
   getLoginError,
   getRegisterError,
   LOGIN_ROLES,
+  REGISTER_ROLES,
   normalizeLoginResponse,
 } from "../../services/auth.js";
 
@@ -16,26 +18,70 @@ const LOGIN_CONTENT = {
   background: `${import.meta.env.BASE_URL}bglogin.png`,
 };
 
-export default function Login({ onSuccess }) {
-  const [isRegister, setIsRegister] = useState(
-    () =>
-      new URLSearchParams(window.location.search).get("page") === "register",
-  );
+export default function Login({ isRegister = false, onNavigate, onSuccess }) {
   const [nama, setNama] = useState("");
   const [type, setType] = useState("guru");
   const [username, setUsername] = useState("");
+  const [sn, setSn] = useState("");
+  const [idKelas, setIdKelas] = useState("");
+  const [classes, setClasses] = useState([]);
+  const [loadingClasses, setLoadingClasses] = useState(false);
+  const [classLoadError, setClassLoadError] = useState("");
+  const [classRetryCount, setClassRetryCount] = useState(0);
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState({ message: "", fields: {} });
   const [success, setSuccess] = useState("");
   const pendingRequest = useRef(null);
+  const registrationCompleted = useRef(false);
+  const roles = isRegister ? REGISTER_ROLES : LOGIN_ROLES;
+  const requiresClass = isRegister && type === "siswa";
+  const classSelectionUnavailable = requiresClass && (loadingClasses || Boolean(classLoadError) || classes.length === 0);
 
   useEffect(() => () => pendingRequest.current?.abort(), []);
+
+  useEffect(() => {
+    pendingRequest.current?.abort();
+    pendingRequest.current = null;
+    setSubmitting(false);
+    setPassword("");
+    setPasswordConfirmation("");
+    setIdKelas("");
+    setError({ message: "", fields: {} });
+    setType((current) => isRegister && !REGISTER_ROLES.some((role) => role.value === current)
+      ? REGISTER_ROLES[0].value
+      : current);
+    setSuccess(!isRegister && registrationCompleted.current
+      ? "Registrasi berhasil. Silakan login menggunakan akun baru Anda."
+      : "");
+    registrationCompleted.current = false;
+  }, [isRegister]);
+
+  useEffect(() => {
+    if (!requiresClass) return;
+    const controller = new AbortController();
+    setLoadingClasses(true);
+    setClassLoadError("");
+    authApi.getClasses({ signal: controller.signal })
+      .then((options) => {
+        if (controller.signal.aborted) return;
+        setClasses(options);
+        setIdKelas((current) => options.some((option) => option.id === current) ? current : "");
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setClassLoadError("Daftar kelas belum dapat dimuat. Silakan coba lagi.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingClasses(false);
+      });
+    return () => controller.abort();
+  }, [requiresClass, classRetryCount]);
 
   async function handleSubmit(event) {
     event.preventDefault();
     if (pendingRequest.current) return;
+
     const controller = new AbortController();
     pendingRequest.current = controller;
     setSubmitting(true);
@@ -44,54 +90,53 @@ export default function Login({ onSuccess }) {
 
     try {
       if (isRegister) {
+        // authApi.register() sudah memakai Axios dari services/api.js.
         await authApi.register(
           {
             nama,
             username,
+            sn,
             type,
+            id_kelas: idKelas,
             password,
             password_confirmation: passwordConfirmation,
           },
           { signal: controller.signal },
         );
+
         if (controller.signal.aborted) return;
-        setIsRegister(false);
         setNama("");
+        setSn("");
+        setIdKelas("");
         setPasswordConfirmation("");
-        setSuccess(
-          "Registrasi berhasil. Silakan login menggunakan akun baru Anda.",
-        );
-        const loginUrl = new URL(window.location.href);
-        loginUrl.searchParams.set("page", "login");
-        window.history.replaceState(window.history.state, "", loginUrl);
+        registrationCompleted.current = true;
+
+        onNavigate(APP_ROUTES.login, { replace: true });
       } else {
         const payload = await authApi.login(
           { username, password, type },
           { signal: controller.signal },
         );
+
         if (controller.signal.aborted) return;
+
         const session = normalizeLoginResponse(payload);
-        await onSuccess?.(session);
+        await onSuccess(session);
       }
+
       if (!controller.signal.aborted) setPassword("");
     } catch (requestError) {
       if (!controller.signal.aborted) {
-        setError(
-          isRegister
-            ? getRegisterError(requestError)
-            : getLoginError(requestError),
-        );
+        setError(isRegister ? getRegisterError(requestError) : getLoginError(requestError));
       }
     } finally {
-      if (!controller.signal.aborted) {
-        pendingRequest.current = null;
-        setSubmitting(false);
-      }
+      if (pendingRequest.current === controller) pendingRequest.current = null;
+      if (!controller.signal.aborted) setSubmitting(false);
     }
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-[#babfbc]= sm:min-h-[860px] sm:shadow-2xl">
+    <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-[#babfbc] sm:min-h-[860px] sm:shadow-2xl">
       {/* EDIT BANNER: tinggi, overlay warna, logo, dan judul sistem. */}
       <header
         aria-label="Sistem Absensi Digital"
@@ -156,9 +201,9 @@ export default function Login({ onSuccess }) {
                 aria-describedby={
                   error.fields.type ? "login-type-error" : undefined
                 }
-                className="grid grid-cols-3 gap-1 rounded-[9px] bg-[#d9d9d9] p-1"
+                className={`grid ${isRegister ? "grid-cols-2" : "grid-cols-2"} gap-1 rounded-[9px] bg-[#d9d9d9] p-1`}
               >
-                {LOGIN_ROLES.map((role) => (
+                {roles.map((role) => (
                   <button
                     key={role.value}
                     type="button"
@@ -228,6 +273,51 @@ export default function Login({ onSuccess }) {
               )}
             </div>
 
+            {isRegister && (
+              <RegistrationField
+                name="sn"
+                label="Nomor kartu (SN) :"
+                autoComplete="off"
+                value={sn}
+                onChange={setSn}
+                error={error.fields.sn}
+              />
+            )}
+
+            {requiresClass && (
+              <div>
+                <label htmlFor="register-id_kelas" className="mb-2 block text-[13px] text-black">
+                  Kelas :
+                </label>
+                <select
+                  id="register-id_kelas"
+                  name="id_kelas"
+                  required
+                  value={idKelas}
+                  disabled={classSelectionUnavailable}
+                  onChange={(event) => setIdKelas(event.target.value)}
+                  aria-invalid={Boolean(error.fields.id_kelas)}
+                  aria-describedby={error.fields.id_kelas ? "register-id_kelas-error" : undefined}
+                  className="h-11 w-full rounded-md border border-transparent bg-[#eaeaea] px-3 text-sm text-slate-900 outline-none transition focus:border-[#009c87] focus:ring-2 focus:ring-[#59c0b4]/30 disabled:opacity-60"
+                >
+                  <option value="">{loadingClasses ? "Memuat kelas..." : "Pilih kelas"}</option>
+                  {classes.map((kelas) => <option key={kelas.id} value={kelas.id}>{kelas.name}</option>)}
+                </select>
+                {error.fields.id_kelas && (
+                  <p id="register-id_kelas-error" className="mt-1 text-xs text-red-700">{error.fields.id_kelas}</p>
+                )}
+                {classLoadError && (
+                  <div className="mt-2 text-xs text-red-700">
+                    <p role="alert">{classLoadError}</p>
+                    <button type="button" onClick={() => setClassRetryCount((count) => count + 1)} className="mt-1 rounded-sm text-school-900 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700">Coba lagi</button>
+                  </div>
+                )}
+                {!loadingClasses && !classLoadError && classes.length === 0 && (
+                  <p role="status" className="mt-1 text-xs text-slate-600">Belum ada kelas yang tersedia. Hubungi admin sekolah.</p>
+                )}
+              </div>
+            )}
+
             <div>
               <label
                 htmlFor="login-password"
@@ -294,7 +384,7 @@ export default function Login({ onSuccess }) {
           <div className="mt-auto flex justify-center pt-24">
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || classSelectionUnavailable}
               className="flex h-[42px] min-w-[145px] items-center justify-center gap-2 rounded-[5px] bg-[#003e30] px-6 text-base text-white transition hover:bg-[#005343] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#009c87] focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-70"
               style={{ fontFamily: '"Arial Narrow", Impact, sans-serif' }}
             >
@@ -312,10 +402,15 @@ export default function Login({ onSuccess }) {
           <p className="mt-4 text-center text-[12px] text-black">
             {isRegister ? "Sudah punya akun? " : "Belum punya akun? "}
             <a
-              href={isRegister ? "?page=login" : "?page=register"}
+              href={isRegister ? APP_ROUTES.login : APP_ROUTES.register}
               aria-disabled={submitting || undefined}
               onClick={(event) => {
-                if (submitting) event.preventDefault();
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                event.preventDefault();
+                if (submitting) return;
+                setError({ message: "", fields: {} });
+                setSuccess("");
+                onNavigate(isRegister ? APP_ROUTES.login : APP_ROUTES.register);
               }}
               className="rounded-sm text-[#0000ff] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2"
             >

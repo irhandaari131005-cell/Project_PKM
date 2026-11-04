@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import axios from "axios";
 import { apiClient } from "../src/services/api.js";
-import { attendanceHistoryApi } from "../src/services/attendanceHistory.js";
+import { attendanceHistoryApi, getHistoryRow } from "../src/services/attendanceHistory.js";
 
 const originalBaseURL = apiClient.defaults.baseURL;
 const originalProxy = apiClient.defaults.proxy;
@@ -13,7 +13,7 @@ const server = createServer((req, res) => {
   const url = new URL(req.url, "http://localhost");
   received.push({ method: req.method, url, headers: req.headers });
   res.setHeader("Content-Type", "application/json");
-  if (url.pathname === "/api/kelas") {
+  if (url.pathname === "/api/data_kelas") {
     res.end(JSON.stringify(classPages[Number(url.searchParams.get("page")) - 1]));
   } else if (url.pathname === "/api/absensi/riwayat") {
     historyStarted?.();
@@ -68,6 +68,21 @@ test("pilihan semua kelas tidak mengirim ID kosong dan tanggal invalid tidak men
   assert.equal(received.length, 1);
 });
 
+test("riwayat CodeIgniter mempertahankan nama siswa, kelas, dan metadata halaman", async () => {
+  historyPayload = {
+    status: 200,
+    data: [{ id_absensi: 1, id_siswa: 7, nama_siswa: "Akbar", id_kelas: 1, nama_kelas: "X RPL 1", status_kehadiran: "hadir" }],
+    meta: { current_page: 2, last_page: 3, per_page: 25, total: 51, from: 26, to: 26 },
+  };
+  const result = await attendanceHistoryApi.getHistory({ id_kelas: "1", tanggal: "2026-10-21", page: 2 });
+  assert.deepEqual(getHistoryRow(result.items[0]), {
+    id: "1", name: "Akbar", className: "X RPL 1", status: "Hadir",
+  });
+  assert.equal(result.currentPage, 2);
+  assert.equal(result.lastPage, 3);
+  assert.equal(result.offset, 25);
+});
+
 test("seluruh halaman daftar kelas dimuat dengan ID string utuh", async () => {
   classPages = [
     { data: [{ id_kelas: "001", nama_kelas: "X-AKL" }], current_page: 1, last_page: 2 },
@@ -76,6 +91,7 @@ test("seluruh halaman daftar kelas dimuat dengan ID string utuh", async () => {
   const result = await attendanceHistoryApi.getClasses();
   assert.deepEqual(result.map(({ id, name }) => ({ id, name })), [{ id: "001", name: "X-AKL" }, { id: "002", name: "XI-AKL" }]);
   assert.deepEqual(received.map(({ url }) => url.searchParams.get("page")), ["1", "2"]);
+  assert.ok(received.every(({ url }) => url.pathname === "/api/data_kelas"));
   assert.ok(received.every(({ method, headers }) => method === "GET" && headers.authorization === "Bearer history-token"));
 });
 
