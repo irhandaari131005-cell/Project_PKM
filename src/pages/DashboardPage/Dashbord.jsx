@@ -62,7 +62,7 @@ export default function Dashbord({
   onLogout,
 }) {
   const canManage = canManageSchoolData(profile);
-  const { students, teachers } = useDashboardData({ includeTeachers: canOpenDashboardView(profile, "data_guru") });
+  const { students, teachers, summary } = useDashboardData({ includeTeachers: canOpenDashboardView(profile, "data_guru") });
   const [active, setActive] = useState("dashboard");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
@@ -71,6 +71,7 @@ export default function Dashbord({
     teachers,
     profile,
     schoolName,
+    summary,
   });
 
   useEffect(() => {

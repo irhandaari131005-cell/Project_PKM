@@ -104,7 +104,25 @@ export function formatCount(value) {
   return value === null || value === undefined ? "—" : numberFormatter.format(value);
 }
 
-export function createDashboardData({ students, teachers, profile, schoolName }) {
+/** Kartu Kehadiran & Ekskul dari /api/dashboard/ringkasan; "—" bila belum/gagal dimuat. */
+export function summaryStats(summary = {}) {
+  const { data, loading = false, error = "" } = summary ?? {};
+  const pending = (label) => ({
+    label, value: loading ? "…" : "—", detail: error ? "Gagal memuat data" : loading ? "Memuat data..." : "Belum tersedia",
+  });
+  const hadir = nonNegativeInteger(data?.kehadiran?.hadir_hari_ini);
+  const totalSiswa = nonNegativeInteger(data?.kehadiran?.total_siswa);
+  const aktif = nonNegativeInteger(data?.ekstrakurikuler?.aktif);
+  return {
+    attendance: hadir === null ? pending("Kehadiran") : {
+      label: "Kehadiran", value: formatCount(hadir),
+      detail: totalSiswa === null ? "Hadir hari ini" : `dari ${formatCount(totalSiswa)} siswa hari ini`,
+    },
+    extracurriculars: aktif === null ? pending("Ekskul") : { label: "Ekskul", value: formatCount(aktif), detail: "Ekskul aktif" },
+  };
+}
+
+export function createDashboardData({ students, teachers, profile, schoolName, summary }) {
   function collectionStat(collection, label) {
     return {
       label,
@@ -128,8 +146,7 @@ export function createDashboardData({ students, teachers, profile, schoolName })
     stats: {
       students: collectionStat(students, "Siswa"),
       teachers: collectionStat(teachers, "Guru"),
-      attendance: { value: "—", detail: "Belum tersedia", label: "Kehadiran" },
-      extracurriculars: { value: "—", detail: "Belum tersedia", label: "Ekskul" },
+      ...summaryStats(summary),
     },
   };
 }
