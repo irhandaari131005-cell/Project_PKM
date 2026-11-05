@@ -169,3 +169,16 @@ test("ringkasan mempertahankan jumlah nol serta membedakan data gagal dan belum 
   assert.equal(dashboard.stats.attendance.value, "—");
   assert.equal(dashboard.welcomeSubtitle, "Admin Rina");
 });
+
+test("kartu Kehadiran & Ekskul memakai ringkasan dashboard", async () => {
+  const { summaryStats } = await import("../src/pages/DashboardPage/dashboardData.js");
+  assert.deepEqual(summaryStats({ data: { kehadiran: { hadir_hari_ini: 12, total_siswa: 1200 }, ekstrakurikuler: { aktif: 3, total: 4 } } }), {
+    attendance: { label: "Kehadiran", value: "12", detail: "dari 1.200 siswa hari ini" },
+    extracurriculars: { label: "Ekskul", value: "3", detail: "Ekskul aktif" },
+  });
+  assert.deepEqual(summaryStats({ data: { kehadiran: { hadir_hari_ini: 0 }, ekstrakurikuler: { aktif: 0 } } }).attendance,
+    { label: "Kehadiran", value: "0", detail: "Hadir hari ini" });
+  assert.deepEqual(summaryStats({ loading: true }).attendance, { label: "Kehadiran", value: "…", detail: "Memuat data..." });
+  assert.deepEqual(summaryStats({ error: "x" }).extracurriculars, { label: "Ekskul", value: "—", detail: "Gagal memuat data" });
+  assert.equal(summaryStats(undefined).attendance.value, "—");
+});

@@ -61,9 +61,22 @@ function useCollection(resource, enabled = true) {
   return { ...state, setPage: goToPage, reload };
 }
 
+function useSummary() {
+  const [state, setState] = useState({ data: null, loading: true, error: "" });
+  useEffect(() => {
+    const controller = new AbortController();
+    dashboardApi.getSummary({ signal: controller.signal })
+      .then((data) => { if (!controller.signal.aborted) setState({ data, loading: false, error: "" }); })
+      .catch(() => { if (!controller.signal.aborted) setState({ data: null, loading: false, error: "Ringkasan belum dapat dimuat." }); });
+    return () => controller.abort();
+  }, []);
+  return state;
+}
+
 export default function useDashboardData({ includeTeachers = false } = {}) {
-  // Keduanya berjalan bersamaan; kegagalan satu endpoint tidak menghapus hasil lainnya.
+  // Semuanya berjalan bersamaan; kegagalan satu endpoint tidak menghapus hasil lainnya.
   const students = useCollection("data_siswa");
   const teachers = useCollection("data_guru", includeTeachers);
-  return { students, teachers };
+  const summary = useSummary();
+  return { students, teachers, summary };
 }

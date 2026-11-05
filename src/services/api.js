@@ -40,6 +40,13 @@ export const dashboardApi = {
   getTeachers(options) {
     return collectionRequest(TEACHERS_ENDPOINT, options);
   },
+  // Angka kartu Kehadiran & Ekskul: { kehadiran: { hadir_hari_ini, total_siswa }, ekstrakurikuler: { aktif, total } }.
+  async getSummary({ signal } = {}) {
+    const payload = await request(env.VITE_DASHBOARD_SUMMARY_ENDPOINT || "/api/dashboard/ringkasan", { method: "get", signal });
+    const data = payload?.data;
+    if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Format ringkasan dashboard belum sesuai.");
+    return data;
+  },
 };
 
 export { request };
