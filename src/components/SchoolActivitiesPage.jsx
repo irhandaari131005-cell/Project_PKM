@@ -105,7 +105,7 @@ export default function SchoolActivitiesPage({ config }) {
         <div aria-busy={visible.loading}>
           {visible.loading ? <ActivityLoading /> : visible.error ? <ActivityError message={Object.values(visible.error.fields)[0] || visible.error.message} onRetry={() => setRevision((value) => value + 1)} /> : !visible.items.length ? (
             <p role="status" className="py-8 text-center text-xs text-slate-500">{filters.search || filters.hari || filters.id_kelas ? "Tidak ada data yang cocok dengan filter." : `Belum ada data ${config.title.toLowerCase()}.`}</p>
-          ) : <ul aria-label={`Daftar ${config.title}`} className={config.Card ? "space-y-4" : "space-y-2"}>
+          ) : <ul aria-label={`Daftar ${config.title}`} className={`${config.Card ? "space-y-4" : "space-y-2"} md:grid md:grid-cols-2 md:gap-3 md:space-y-0 xl:grid-cols-3`}>
             {visible.items.map((record) => {
               const item = config.view(record);
               if (config.Card) return <config.Card key={item.id} item={item} onDetail={() => open("detail", item.id)} onEdit={() => open("edit", item.id)} />;

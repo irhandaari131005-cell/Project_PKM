@@ -136,11 +136,12 @@ export default function Login({ isRegister = false, onNavigate, onSuccess }) {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-[#babfbc] sm:min-h-[860px] sm:shadow-2xl">
+    // HP: banner di atas + kartu form. Tablet/desktop (md): dua kolom, banner kiri setinggi layar, form kanan.
+    <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col overflow-hidden bg-[#babfbc] sm:min-h-[860px] sm:shadow-2xl md:min-h-dvh md:max-w-none md:flex-row md:bg-white md:shadow-none">
       {/* EDIT BANNER: tinggi, overlay warna, logo, dan judul sistem. */}
       <header
         aria-label="Sistem Absensi Digital"
-        className="relative aspect-[1.58/1] w-full shrink-0 overflow-hidden rounded-b-2xl bg-[#00645f]"
+        className="relative aspect-[1.58/1] w-full shrink-0 overflow-hidden rounded-b-2xl bg-[#00645f] md:aspect-auto md:min-h-dvh md:w-1/2 md:rounded-none lg:w-3/5"
       >
         <img
           src={LOGIN_CONTENT.background}
@@ -150,22 +151,22 @@ export default function Login({ isRegister = false, onNavigate, onSuccess }) {
         <div className="absolute inset-0 bg-[#006b66]/40" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#003e35]/90 via-[#003e35]/10 to-transparent" />
 
-        <div className="absolute inset-x-[10%] top-[17%] flex items-center gap-3">
+        <div className="absolute inset-x-[10%] top-[17%] flex items-center gap-3 md:top-1/2 md:-translate-y-1/2 md:gap-6">
           <img
             src={LOGIN_CONTENT.logo}
             alt={`Logo ${LOGIN_CONTENT.schoolName}`}
-            className="w-[42%] shrink-0 object-contain"
+            className="w-[42%] shrink-0 object-contain md:w-[38%] md:max-w-[260px]"
           />
           <div className="min-w-0 text-white">
             <p
-              className="text-[clamp(25px,8.5vw,38px)] leading-[1.02] drop-shadow-md"
+              className="text-[clamp(25px,8.5vw,38px)] leading-[1.02] drop-shadow-md md:text-[clamp(38px,4.5vw,64px)]"
               style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}
             >
               <span className="block italic">SISTEM</span>
               <span className="block">ABSENSI</span>
               <span className="block">DIGITAL</span>
             </p>
-            <p className="mt-1.5 flex items-center gap-1 whitespace-nowrap text-[clamp(8px,2.4vw,10px)]">
+            <p className="mt-1.5 flex items-center gap-1 whitespace-nowrap text-[clamp(8px,2.4vw,10px)] md:mt-3 md:text-sm">
               <MapPin size={10} aria-hidden="true" /> {LOGIN_CONTENT.schoolName}
             </p>
           </div>
@@ -175,11 +176,11 @@ export default function Login({ isRegister = false, onNavigate, onSuccess }) {
       {/* EDIT PANEL: ukuran kartu putih dan tulisan Selamat Datang. */}
       <section
         aria-labelledby="login-title"
-        className="relative z-10 mx-3 -mt-10 flex min-h-[530px] flex-1 flex-col rounded-t-[28px] bg-white shadow-[0_0_7px_rgba(0,0,0,0.35)]"
+        className="relative z-10 mx-3 -mt-10 flex min-h-[530px] flex-1 flex-col rounded-t-[28px] bg-white shadow-[0_0_7px_rgba(0,0,0,0.35)] md:m-0 md:min-h-dvh md:justify-center md:overflow-y-auto md:rounded-none md:py-10 md:shadow-none"
       >
         <h1
           id="login-title"
-          className="rounded-t-[26px] bg-white px-3 py-4 text-center text-[clamp(29px,8.5vw,42px)] font-bold leading-tight tracking-[-0.8px] text-black shadow-[0_5px_8px_rgba(0,0,0,0.22)]"
+          className="rounded-t-[26px] bg-white px-3 py-4 text-center text-[clamp(29px,8.5vw,42px)] font-bold leading-tight tracking-[-0.8px] text-black shadow-[0_5px_8px_rgba(0,0,0,0.22)] md:mx-auto md:w-full md:max-w-md md:shadow-none"
         >
           {isRegister ? "Selamat Datang" : LOGIN_CONTENT.title}
         </h1>
@@ -188,7 +189,7 @@ export default function Login({ isRegister = false, onNavigate, onSuccess }) {
         <form
           onSubmit={handleSubmit}
           aria-busy={submitting}
-          className="flex flex-1 flex-col px-7 pb-20 pt-8 min-[390px]:px-9"
+          className="flex flex-1 flex-col px-7 pb-20 pt-8 min-[390px]:px-9 md:mx-auto md:w-full md:max-w-md md:flex-none md:pb-8"
         >
           <fieldset disabled={submitting} className="min-w-0 space-y-5">
             <div>

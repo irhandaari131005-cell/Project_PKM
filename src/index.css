@@ -38,7 +38,8 @@ button {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-@media (min-width: 640px) {
+/* Bingkai "HP" hanya untuk layar kecil-menengah; tablet & desktop memakai layout penuh. */
+@media (min-width: 640px) and (max-width: 767px) {
   body {
     padding: 22px 0;
   }

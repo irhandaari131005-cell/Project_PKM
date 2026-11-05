@@ -49,7 +49,7 @@ export default function ExtracurricularCarousel({ revision = 0, paused = false }
     <section aria-label="Foto kegiatan ekstrakurikuler" aria-roledescription="carousel" className="overflow-hidden rounded-2xl border border-emerald-900/20 bg-emerald-50 shadow-sm"
       onMouseEnter={() => setHovering(true)} onMouseLeave={() => setHovering(false)}
       onFocusCapture={() => setFocusPaused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setFocusPaused(false); }}>
-      <div className="relative aspect-[2/1] touch-pan-y overflow-hidden"
+      <div className="relative aspect-[2/1] touch-pan-y overflow-hidden md:aspect-[5/2] lg:aspect-[3/1]"
         onPointerDown={(event) => { if (event.isPrimary) touch.current = { x: event.clientX, y: event.clientY }; }}
         onPointerCancel={() => { touch.current = null; }}
         onPointerUp={(event) => {

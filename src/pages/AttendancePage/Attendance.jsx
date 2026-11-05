@@ -156,7 +156,7 @@ export default function Attendance() {
       <div
         role="group"
         aria-label="Jenis absensi"
-        className="relative mx-8 -mt-3 grid grid-cols-2 gap-2"
+        className="relative mx-8 -mt-3 grid grid-cols-2 gap-2 md:mx-auto md:max-w-md"
       >
         {ATTENDANCE_TYPES.map(({ value, label }) => (
           <button
@@ -171,7 +171,7 @@ export default function Attendance() {
         ))}
       </div>
 
-      <div aria-busy={processing} className="mx-8 mt-6 text-center min-[380px]:mt-8">
+      <div aria-busy={processing} className="mx-8 mt-6 text-center min-[380px]:mt-8 md:mx-auto md:max-w-md">
         <div
           aria-hidden="true"
           className="flex aspect-square w-full items-center justify-center rounded-[12px] rounded-tr-[38px] border-[3px] border-[#002d24] bg-[#003D32] p-7"

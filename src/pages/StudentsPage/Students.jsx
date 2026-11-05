@@ -237,7 +237,7 @@ export default function Students({ initialTotal = null, onStudentCreated, canMan
                 : "Belum ada data siswa."}
             </p>
           ) : (
-            <ul className="space-y-1.5 min-[380px]:space-y-2">
+            <ul className="space-y-1.5 min-[380px]:space-y-2 md:grid md:grid-cols-2 md:gap-3 md:space-y-0 xl:grid-cols-3">
               {visible.items.map((record, index) => (
                 <StudentCard
                   key={`${record.id_siswa ?? record.id ?? visible.currentPage}-${index}`}
