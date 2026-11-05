@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Bell,
   CalendarCheck,
   CalendarDays,
   ChevronDown,
@@ -20,7 +19,6 @@ import {
   RefreshCw,
   ScanQrCode,
   School,
-  ShieldAlert,
   Trophy,
   User,
   UserCircle,
@@ -722,27 +720,25 @@ function CollectionError({ collection }) {
   );
 }
 
+// Menu "Pelanggaran" dan "Notifikasi" disembunyikan sampai halaman + API-nya dibuat.
 const navItems = [
   { key: "dashboard", label: "Dashboard", Icon: House },
-  {
-    key: "violations",
-    label: "Pelanggaran",
-    sublabel: "Siswa",
-    Icon: ShieldAlert,
-  },
   { key: "scan", label: "Scan Presensi", Icon: ScanQrCode, featured: true },
-  { key: "notifications", label: "Notifikasi", Icon: Bell },
   { key: "account", label: "Akun", Icon: UserRound },
 ];
 
+// Kelas statis agar Tailwind tetap menghasilkan CSS-nya.
+const navColumns = { 1: "grid-cols-1", 2: "grid-cols-2", 3: "grid-cols-3", 4: "grid-cols-4", 5: "grid-cols-5" };
+
 function BottomNavigation({ active = "dashboard", onNavigate, profile }) {
+  const items = navItems.filter(({ key }) => canOpenDashboardView(profile, key === "scan" ? "attendance" : key));
   return (
     <nav
       aria-label="Navigasi utama"
       className="safe-bottom fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-[430px] border-t border-slate-200 bg-white px-1 pb-1 pt-1 shadow-[0_-3px_15px_rgba(0,0,0,0.5)] sm:sticky"
     >
-      <div className={`grid h-[45px] items-end ${canManageSchoolData(profile) ? "grid-cols-5" : "grid-cols-4"}`}>
-        {navItems.filter(({ key }) => canOpenDashboardView(profile, key === "scan" ? "attendance" : key)).map(({ key, label, sublabel, Icon, featured }) => {
+      <div className={`grid h-[45px] items-end ${navColumns[items.length] || "grid-cols-5"}`}>
+        {items.map(({ key, label, sublabel, Icon, featured }) => {
           if (featured) {
             return (
               <button
