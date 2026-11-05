@@ -66,3 +66,10 @@ test("error backend mempertahankan validasi field dan membedakan konflik, sesi, 
   for (const [status, pattern] of [[401, /login/], [403, /izin/], [404, /tidak ditemukan/], [409, /berbenturan/], [429, /Terlalu banyak/]]) assert.match(getActivityError({ response: { status } }).message, pattern);
   assert.match(getActivityError({ code: "ECONNABORTED" }, "save").message, /Periksa data/);
 });
+
+test("pesan bentrok jadwal (409) dari server ditampilkan apa adanya", () => {
+  const message = "Guru ini sudah mengajar di jadwal lain pada jam tersebut: Matematika (X RPL 1, 07:00–08:30). Periksa hari, jam, guru, dan ruangan.";
+  assert.equal(getActivityError({ response: { status: 409, data: { message } } }, "save").message, message);
+  assert.match(getActivityError({ response: { status: 409, data: { message: "  " } } }, "save").message, /berbenturan/);
+  assert.match(getActivityError({ response: { status: 409 } }, "save").message, /berbenturan/);
+});
