@@ -176,7 +176,7 @@ export default function Classes({ canManage = false }) {
                 : "Belum ada data kelas."}
             </p>
           ) : (
-            <ul aria-label="Daftar kelas" className="space-y-2">
+            <ul aria-label="Daftar kelas" className="space-y-2 md:grid md:grid-cols-2 md:gap-3 md:space-y-0 xl:grid-cols-3">
               {visible.items.map((record) => {
                 const item = getClassView(record);
                 return (

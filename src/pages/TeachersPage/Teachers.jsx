@@ -188,7 +188,7 @@ export default function Teachers({ onTeacherCreated, canManage = false }) {
           ) : (
             <ul
               aria-label="Daftar guru"
-              className="space-y-1 min-[380px]:space-y-1.5"
+              className="space-y-1 min-[380px]:space-y-1.5 md:grid md:grid-cols-2 md:gap-3 md:space-y-0 xl:grid-cols-3"
             >
               {visible.items.map((record, index) => (
                 <TeacherCard

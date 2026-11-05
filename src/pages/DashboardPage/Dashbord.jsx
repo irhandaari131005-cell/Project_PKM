@@ -110,16 +110,10 @@ export default function Dashbord({
     else dispatchNavigation("logout");
   }
 
+  // HP: kolom tunggal (maks 430px) + sidebar laci + navigasi bawah.
+  // Tablet (md): lebar penuh. Desktop (lg): sidebar tetap di kiri, tanpa navigasi bawah.
   return (
-    <main className="relative mx-auto min-h-dvh w-full max-w-[430px] bg-school-900 sm:min-h-[844px] sm:shadow-2xl">
-      <Header
-        schoolName={schoolName}
-        onMenuClick={() => setIsSidebarOpen(true)}
-        onProfileClick={() => handleNavigate("account")}
-        onChangePassword={() => setIsChangePasswordOpen(true)}
-        onLogout={handleLogout}
-      />
-
+    <div className="min-h-dvh bg-school-900 lg:flex">
       <Sidebar
         open={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
@@ -127,6 +121,14 @@ export default function Dashbord({
         schoolName={schoolName}
         profile={profile}
         onNavigate={handleNavigate}
+        onLogout={handleLogout}
+      />
+    <main className="relative mx-auto min-h-dvh w-full max-w-[430px] bg-school-900 sm:min-h-[844px] sm:shadow-2xl md:max-w-none md:shadow-none lg:min-w-0 lg:flex-1">
+      <Header
+        schoolName={schoolName}
+        onMenuClick={() => setIsSidebarOpen(true)}
+        onProfileClick={() => handleNavigate("account")}
+        onChangePassword={() => setIsChangePasswordOpen(true)}
         onLogout={handleLogout}
       />
 
@@ -139,8 +141,10 @@ export default function Dashbord({
       )}
 
       <div
-        className={`relative z-10 mx-3 -mt-24 min-h-[calc(100dvh-54px)] rounded-t-[24px] bg-white pb-28 sm:min-h-[790px] ${["attendance", "attendance-history", "data_siswa", "data_guru", "classes", "extracurricular", "schedules"].includes(active) ? "px-0 pt-0" : "px-3 pt-4"}`}
+        className={`relative z-10 mx-3 -mt-24 min-h-[calc(100dvh-54px)] rounded-t-[24px] bg-white pb-28 sm:min-h-[790px] md:mx-6 md:min-h-[calc(100dvh-54px)] lg:mx-8 lg:pb-10 ${["attendance", "attendance-history", "data_siswa", "data_guru", "classes", "extracurricular", "schedules"].includes(active) ? "px-0 pt-0" : "px-3 pt-4"}`}
       >
+        {/* Ukuran teks halaman dirancang untuk HP; di layar lebar seluruh isi diperbesar proporsional. */}
+        <div className="md:[zoom:1.15] xl:[zoom:1.25]">
         {active === "attendance" && canManage && <Attendance />}
         {active === "attendance-history" && <AttendanceHistory />}
         {active === "dashboard" && (
@@ -178,10 +182,12 @@ export default function Dashbord({
         {active === "classes" && <Classes canManage={canManage} />}
         {active === "extracurricular" && <Extracurricular />}
         {active === "schedules" && <Schedules />}
+        </div>
       </div>
 
       <BottomNavigation profile={profile} active={active} onNavigate={handleNavigate} />
     </main>
+    </div>
   );
 }
 
@@ -196,17 +202,17 @@ function Header({
 
   return (
     <header className="relative flex h-[150px] items-center justify-between rounded-b-[24px] bg-school-800 px-4 text-white">
-      {/* Menu HAMBURGER Strip Section */}
+      {/* Menu HAMBURGER Strip Section (desktop: sidebar selalu tampil) */}
       <button
         type="button"
         aria-label="Buka menu"
         onClick={onMenuClick}
-        className="rounded-lg mb-24 transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/70"
+        className="rounded-lg mb-24 transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/70 lg:hidden"
       >
         <Menu className="h-10 w-11" size={30} strokeWidth={3} />
       </button>
       {/* Logo Section */}
-      <div className="absolute left-1/2 top-0 flex h-[60px] w-[135px] -translate-x-1/2 items-center justify-center rounded-t-2xl border-x border-b border-white/10 bg-school-950/40">
+      <div className="absolute left-1/2 top-0 flex lg:hidden h-[60px] w-[135px] -translate-x-1/2 items-center justify-center rounded-t-2xl border-x border-b border-white/10 bg-school-950/40">
         <div className="flex h-full w-full pb-1.5 items-center justify-center rounded-t-2xl shadow-[inset_0_4px_2px_rgba(0,0,0,0.3)]">
           <img
             src={`${import.meta.env.BASE_URL}logodhakar.png`}
@@ -311,7 +317,7 @@ function Sidebar({
   schoolName,
   profile,
 }) {
-  if (!open) return null;
+  // HP/tablet: laci yang dibuka tombol menu. Desktop (lg): selalu tampil di kiri, tanpa overlay.
   return (
     <>
       {/* Overlay gelap di belakang sidebar */}
@@ -320,22 +326,22 @@ function Sidebar({
           type="button"
           aria-label="Tutup menu"
           onClick={onClose}
-          className="fixed inset-0 z-40 bg-black/50"
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
         />
       )}
 
       {/* Sidebar */}
       <aside
-        role="dialog"
-        aria-modal="true"
+        role={open ? "dialog" : undefined}
+        aria-modal={open ? "true" : undefined}
         aria-label="Menu dashboard"
-        className={`fixed left-0 top-0 z-50 flex h-dvh
+        className={`fixed left-0 top-0 z-50 h-dvh
           w-[180px] flex-col overflow-hidden
           rounded-r-[28px] border-r border-white/10
           bg-[#003D32] text-white shadow-2xl
-          transition-transform duration-300 ease-in-out
           sm:w-[220px]
-          ${open ? "translate-x-0" : "-translate-x-full"}`}
+          lg:sticky lg:z-auto lg:flex lg:w-64 lg:shrink-0 lg:rounded-none lg:shadow-none
+          ${open ? "flex" : "hidden"}`}
       >
         {/* Identitas sekolah */}
         <div
@@ -369,7 +375,9 @@ function Sidebar({
                          rounded-tr-xl  rounded-br-xl border border-white/5
                          bg-[#005343] px-2.5 py-2.5
                          text-left text-[11px]
-                         transition-colors hover:bg-[#08715B]"
+                         transition-colors hover:bg-[#08715B]
+                         aria-[current=page]:bg-[#08715B] aria-[current=page]:font-semibold
+                         lg:gap-3 lg:px-4 lg:py-3 lg:text-sm"
             >
               <Icon size={20} strokeWidth={2} />
               <span>{label}</span>
@@ -634,7 +642,7 @@ function WelcomeCard({ data }) {
         {data.welcomeTitle}
         <span className="block">{data.welcomeSubtitle}</span>
       </h1>
-      <p className="mt-2 max-w-[250px] text-[9px] leading-[1.35] text-emerald-50/90">
+      <p className="mt-2 max-w-[250px] text-[9px] md:max-w-xl leading-[1.35] text-emerald-50/90">
         {data.welcomeDescription}
       </p>
       <div
@@ -659,7 +667,7 @@ function StatisticsGrid({ stats }) {
       aria-label="Ringkasan statistik"
       className="rounded-xl bg-school-900 p-2 shadow-card"
     >
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2 md:gap-3 lg:grid-cols-4">
         {statOrder.map((key) => (
           <StatCard key={key} statKey={key} stat={stats[key]} />
         ))}
@@ -735,7 +743,7 @@ function BottomNavigation({ active = "dashboard", onNavigate, profile }) {
   return (
     <nav
       aria-label="Navigasi utama"
-      className="safe-bottom fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-[430px] border-t border-slate-200 bg-white px-1 pb-1 pt-1 shadow-[0_-3px_15px_rgba(0,0,0,0.5)] sm:sticky"
+      className="safe-bottom fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-[430px] border-t border-slate-200 bg-white px-1 pb-1 pt-1 shadow-[0_-3px_15px_rgba(0,0,0,0.5)] sm:sticky md:max-w-none lg:hidden"
     >
       <div className={`grid h-[45px] items-end ${navColumns[items.length] || "grid-cols-5"}`}>
         {items.map(({ key, label, sublabel, Icon, featured }) => {

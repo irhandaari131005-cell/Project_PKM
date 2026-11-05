@@ -42,7 +42,7 @@ export default function Profile({ profile: sessionProfile = {}, onProfileUpdated
   }
 
   return (
-    <section className="relative min-h-full rounded-xl bg-white px-3 pb-4 pt-0 text-[#003D32]">
+    <section className="relative min-h-full rounded-xl bg-white px-3 pb-4 pt-0 text-[#003D32] md:mx-auto md:max-w-2xl">
       <section className="relative z-10 -mt-1 rounded-[20px] border border-gray-200 bg-white px-3 py-3 text-center shadow-[0_2px_4px_rgba(0,0,0,0.22)]">
         <h1 className="text-[23px] font-bold leading-tight">{editing ? "Edit Profil" : "Profil Saya"}</h1>
         <p className="text-[10px]">Kelola informasi data diri Anda</p>
