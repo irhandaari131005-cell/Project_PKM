@@ -39,6 +39,21 @@ import Profile from "../ProfilePage/Profile.jsx";
 import { createDashboardData, getProfileView } from "./dashboardData.js";
 import { canManageSchoolData, canOpenDashboardView } from "../../services/access.js";
 import { changePassword, getChangePasswordError } from "../../services/auth.js";
+import PageLoader, { TopProgressBar } from "../../components/PageLoader.jsx";
+
+// Lama loader tampil saat pindah menu: cukup terasa tanpa membuat pengguna menunggu.
+const PAGE_TRANSITION_MS = 550;
+
+function prefersReducedMotion() {
+  return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+// Nama halaman untuk teks "Memuat …".
+const viewLabels = {
+  dashboard: "Dashboard", attendance: "Absensi", "attendance-history": "Riwayat Absensi",
+  data_siswa: "Data Siswa", data_guru: "Data Guru", classes: "Data Kelas",
+  extracurricular: "Ekstrakurikuler", schedules: "Jadwal", account: "Profil",
+};
 
 const localViews = new Set([
   "dashboard",
@@ -62,6 +77,9 @@ export default function Dashbord({
   const canManage = canManageSchoolData(profile);
   const { students, teachers, summary } = useDashboardData({ includeTeachers: canOpenDashboardView(profile, "data_guru") });
   const [active, setActive] = useState("dashboard");
+  // Halaman tujuan selama animasi pindah menu berjalan (null = tidak sedang pindah).
+  const [pendingView, setPendingView] = useState(null);
+  const transitionTimer = useRef(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const dashboard = createDashboardData({
@@ -97,12 +115,34 @@ export default function Dashbord({
       );
   }
 
+  useEffect(() => () => window.clearTimeout(transitionTimer.current), []);
+
   function handleNavigate(key) {
     setIsSidebarOpen(false);
     const view = key === "scan" ? "attendance" : key;
     if (!canOpenDashboardView(profile, view)) return;
-    if (localViews.has(view)) setActive(view);
-    else dispatchNavigation(key);
+    if (!localViews.has(view)) {
+      dispatchNavigation(key);
+      return;
+    }
+    // Klik cepat berkali-kali: hanya tujuan terakhir yang dipakai.
+    window.clearTimeout(transitionTimer.current);
+    if (view === active) {
+      setPendingView(null);
+      return;
+    }
+    window.scrollTo({ top: 0 });
+    if (prefersReducedMotion()) {
+      setPendingView(null);
+      setActive(view);
+      return;
+    }
+    // Loader tampil sebentar, lalu halaman baru masuk dengan animasi (lihat PageLoader).
+    setPendingView(view);
+    transitionTimer.current = window.setTimeout(() => {
+      setActive(view);
+      setPendingView(null);
+    }, PAGE_TRANSITION_MS);
   }
 
   function handleLogout() {
@@ -117,7 +157,7 @@ export default function Dashbord({
       <Sidebar
         open={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
-        active={active}
+        active={pendingView ?? active}
         schoolName={schoolName}
         profile={profile}
         onNavigate={handleNavigate}
@@ -143,8 +183,15 @@ export default function Dashbord({
       <div
         className={`relative z-10 mx-3 -mt-24 min-h-[calc(100dvh-54px)] rounded-t-[24px] bg-white pb-28 sm:min-h-[790px] md:mx-6 md:min-h-[calc(100dvh-54px)] lg:mx-8 lg:pb-10 ${["attendance", "attendance-history", "data_siswa", "data_guru", "classes", "extracurricular", "schedules"].includes(active) ? "px-0 pt-0" : "px-3 pt-4"}`}
       >
-        {/* Ukuran teks halaman dirancang untuk HP; di layar lebar seluruh isi diperbesar proporsional. */}
-        <div className="md:[zoom:1.15] xl:[zoom:1.25]">
+        {pendingView && (
+          <>
+            <TopProgressBar />
+            <PageLoader label={`Memuat ${viewLabels[pendingView] ?? "halaman"}`} />
+          </>
+        )}
+        {/* Ukuran teks halaman dirancang untuk HP; di layar lebar seluruh isi diperbesar proporsional.
+            key={active}: setiap pindah menu, halaman baru masuk dengan animasi fade + geser naik. */}
+        <div key={active} className="animate-school-page-in md:[zoom:1.15] xl:[zoom:1.25]">
         {active === "attendance" && canManage && <Attendance />}
         {active === "attendance-history" && <AttendanceHistory />}
         {active === "dashboard" && (
@@ -185,7 +232,7 @@ export default function Dashbord({
         </div>
       </div>
 
-      <BottomNavigation profile={profile} active={active} onNavigate={handleNavigate} />
+      <BottomNavigation profile={profile} active={pendingView ?? active} onNavigate={handleNavigate} />
     </main>
     </div>
   );
