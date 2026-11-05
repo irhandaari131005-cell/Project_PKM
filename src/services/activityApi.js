@@ -123,7 +123,13 @@ export function getActivityError(error, action = "load") {
   if (status === 401) message = "Sesi berakhir. Silakan login kembali.";
   else if (status === 403) message = "Anda tidak memiliki izin untuk mengakses atau mengubah data ini.";
   else if (status === 404) message = "Data tidak ditemukan. Muat ulang daftar.";
-  else if (status === 409) message = "Jadwal atau data berbenturan. Periksa hari, jam, guru, dan ruangan.";
+  else if (status === 409) {
+    // Backend menyebut jadwal mana yang bentrok; tampilkan apa adanya bila tersedia.
+    const serverMessage = error.response?.data?.message;
+    message = typeof serverMessage === "string" && serverMessage.trim()
+      ? serverMessage.trim()
+      : "Jadwal atau data berbenturan. Periksa hari, jam, guru, dan ruangan.";
+  }
   else if (status === 413) message = "Ukuran unggahan melebihi batas server. Kecilkan foto sebelum mencoba lagi.";
   else if (status === 422) message = "Periksa kembali data yang diisi.";
   else if (status === 429) message = "Terlalu banyak permintaan. Silakan tunggu sebentar.";
