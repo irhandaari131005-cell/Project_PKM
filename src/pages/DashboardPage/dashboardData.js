@@ -72,18 +72,31 @@ export function getPersonView(record, resource, page = 1, index = 0) {
   };
 }
 
+const birthDateFormatter = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const typeLabels = { guru: "Guru", siswa: "Siswa" };
+const statusLabels = { ACTIVE: "Aktif", INACTIVE: "Nonaktif", aktif: "Aktif", nonaktif: "Nonaktif" };
+
+// "Bandung, 28 Februari 1990" dari tempat_lahir + tanggal_lahir (YYYY-MM-DD) backend.
+export function formatBirth(place, date) {
+  const match = typeof date === "string" ? /^(\d{4})-(\d{2})-(\d{2})/.exec(date) : null;
+  const dateLabel = match ? birthDateFormatter.format(new Date(Date.UTC(+match[1], +match[2] - 1, +match[3]))) : "";
+  return [typeof place === "string" ? place.trim() : "", dateLabel].filter(Boolean).join(", ") || undefined;
+}
+
 export function getProfileView(profile) {
   // Profil harus berasal dari pengguna yang sedang login, bukan daftar siswa/guru.
   const record = profile?.data ?? profile ?? {};
   return {
     name: record.nama_siswa ?? record.nama ?? record.name,
     identifier: record.sn ?? record.nisn ?? record.nig ?? record.nip,
-    status: record.status,
+    status: statusLabels[record.status] ?? record.status,
     type: record.type,
-    birthDate: record.birthDate,
-    address: record.address,
-    phone: record.phone,
-    photo: record.photo,
+    typeLabel: typeLabels[record.type] ?? record.type,
+    className: record.nama_kelas,
+    birthDate: formatBirth(record.tempat_lahir, record.tanggal_lahir) ?? record.birthDate,
+    address: record.alamat ?? record.address,
+    phone: record.no_telp ?? record.phone,
+    photo: record.foto_url || record.photo,
   };
 }
 

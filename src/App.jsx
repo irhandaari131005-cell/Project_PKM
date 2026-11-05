@@ -101,6 +101,18 @@ export default function App() {
     }
   }
 
+  // Nama baru dari "Profil Saya" langsung tampil di header/sidebar tanpa reload.
+  // Tipe/izin tetap dari sesi; hanya nama yang disalin dari respons profil.
+  function handleProfileUpdated(profile) {
+    if (typeof profile?.nama !== "string") return;
+    setSession((current) => {
+      if (!current) return current;
+      const next = { ...current, user: { ...current.user, nama: profile.nama } };
+      try { saveAuthSession(next); } catch { /* localStorage tidak tersedia: cukup state saja */ }
+      return next;
+    });
+  }
+
   function finishLogout() {
     sessionRequest.current?.abort();
     clearAuthSession();
@@ -127,7 +139,7 @@ export default function App() {
 
   return route === APP_ROUTES.dashboard ? (
     <>
-      <Dashbord profile={session.user} onLogout={handleLogout} />
+      <Dashbord profile={session.user} onLogout={handleLogout} onProfileUpdated={handleProfileUpdated} />
       {(loggingOut || logoutError) && (
         <div className="fixed inset-x-0 bottom-24 z-50 mx-auto max-w-[406px] rounded-md bg-white p-4 text-center shadow-lg">
           <p role={logoutError ? "alert" : "status"}>{logoutError || "Sedang keluar..."}</p>

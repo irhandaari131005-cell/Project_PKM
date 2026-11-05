@@ -6,6 +6,7 @@ const REGISTER_ENDPOINT = env.VITE_REGISTER_ENDPOINT || "/api/register";
 const REGISTER_CLASSES_ENDPOINT = env.VITE_REGISTER_CLASSES_ENDPOINT || "/api/data_kelas";
 const SESSION_ENDPOINT = env.VITE_SESSION_ENDPOINT || "/api/me";
 const LOGOUT_ENDPOINT = env.VITE_LOGOUT_ENDPOINT || "/api/logout";
+const CHANGE_PASSWORD_ENDPOINT = env.VITE_CHANGE_PASSWORD_ENDPOINT || "/api/change_password";
 const USER_STORAGE_KEY = "auth_user";
 
 // Kontrak awal login: sesuaikan key dan nilai role ini dengan controller backend.
@@ -280,4 +281,63 @@ export function clearAuthSession() {
   const storage = globalThis.localStorage;
   storage?.removeItem("auth_token");
   storage?.removeItem(USER_STORAGE_KEY);
+}
+
+// ---- Ganti password (PATCH /api/change_password) ------------------------------
+// Backend memakai bcrypt: password dihitung per byte (UTF-8), 8–72 byte, tanpa karakter null.
+function byteLength(value) {
+  return new TextEncoder().encode(value).length;
+}
+
+function changePasswordError(field, message) {
+  const error = new Error(message);
+  error.status = 422;
+  error.field = field;
+  return error;
+}
+
+/** Validasi di browser sebelum dikirim; backend tetap memvalidasi ulang. */
+export function buildChangePasswordPayload({ username, currentPassword, newPassword, confirmPassword }) {
+  if (typeof username !== "string" || !username.trim()) {
+    throw changePasswordError("username", "Sesi login tidak memuat username. Silakan login ulang.");
+  }
+  if (typeof currentPassword !== "string" || !currentPassword) {
+    throw changePasswordError("currentPassword", "Password saat ini wajib diisi.");
+  }
+  if (typeof newPassword !== "string" || byteLength(newPassword) < 8) {
+    throw changePasswordError("newPassword", "Password baru minimal 8 karakter.");
+  }
+  if (byteLength(newPassword) > 72 || newPassword.includes("\0")) {
+    throw changePasswordError("newPassword", "Password baru terlalu panjang (maksimal 72 byte).");
+  }
+  if (newPassword === currentPassword) {
+    throw changePasswordError("newPassword", "Password baru harus berbeda dari password saat ini.");
+  }
+  if (newPassword !== confirmPassword) {
+    throw changePasswordError("confirmPassword", "Konfirmasi password tidak cocok.");
+  }
+  return { username: username.trim(), password: currentPassword, new_password: newPassword };
+}
+
+export async function changePassword(values, { signal } = {}) {
+  const payload = await request(CHANGE_PASSWORD_ENDPOINT, {
+    method: "patch",
+    data: buildChangePasswordPayload(values),
+    signal,
+  });
+  assertAuthResponse(payload, "Password belum berhasil diubah.");
+  return payload;
+}
+
+export function getChangePasswordError(error) {
+  if (error?.field) return { message: error.message, field: error.field };
+  const status = error?.response?.status ?? error?.status;
+  let message = "Password belum berhasil diubah. Silakan coba lagi.";
+  if (status === 401) message = "Password saat ini salah.";
+  else if (status === 404) message = "Akun tidak ditemukan. Silakan login ulang.";
+  else if (status === 429) message = "Terlalu banyak percobaan gagal. Tunggu beberapa saat lalu coba lagi.";
+  else if (status === 400) message = error.response?.data?.message || "Periksa kembali password yang diisi.";
+  else if (["ECONNABORTED", "ETIMEDOUT"].includes(error?.code)) message = "Server belum merespons. Silakan coba lagi.";
+  else if (error?.code === "ERR_NETWORK") message = "Tidak dapat terhubung ke server. Periksa koneksi Anda.";
+  return { message, field: status === 401 ? "currentPassword" : null };
 }
