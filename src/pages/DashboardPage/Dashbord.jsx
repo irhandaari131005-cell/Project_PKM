@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Bell,
   CalendarCheck,
@@ -40,6 +40,7 @@ import Schedules from "../SchedulesPage/Schedules.jsx";
 import Profile from "../ProfilePage/Profile.jsx";
 import { createDashboardData, getProfileView } from "./dashboardData.js";
 import { canManageSchoolData, canOpenDashboardView } from "../../services/access.js";
+import { changePassword, getChangePasswordError } from "../../services/auth.js";
 
 const localViews = new Set([
   "dashboard",
@@ -133,6 +134,7 @@ export default function Dashbord({
       {isChangePasswordOpen && (
         <ChangePasswordModal
           open
+          username={profile?.username}
           onClose={() => setIsChangePasswordOpen(false)}
         />
       )}
@@ -419,7 +421,7 @@ function Sidebar({
   );
 }
 
-function ChangePasswordModal({ open, onClose }) {
+function ChangePasswordModal({ open, onClose, username }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -428,27 +430,37 @@ function ChangePasswordModal({ open, onClose }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const request = useRef(null);
+
+  // Modal ditutup saat request berjalan: batalkan agar state tidak diubah setelah unmount.
+  useEffect(() => () => request.current?.abort(), []);
 
   if (!open) return null;
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
+    if (submitting) return;
     setError("");
     setSuccess("");
 
-    if (newPassword.length < 8) {
-      setError("Password baru minimal 8 karakter.");
-      return;
+    const controller = new AbortController();
+    request.current = controller;
+    setSubmitting(true);
+    try {
+      // Username diambil dari sesi login; pengguna tidak perlu mengetiknya.
+      await changePassword({ username, currentPassword, newPassword, confirmPassword }, { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setSuccess("Password berhasil diubah. Gunakan password baru saat login berikutnya.");
+    } catch (caught) {
+      if (!controller.signal.aborted) setError(getChangePasswordError(caught).message);
+    } finally {
+      if (!controller.signal.aborted) setSubmitting(false);
+      request.current = null;
     }
-
-    if (newPassword !== confirmPassword) {
-      setError("Konfirmasi password tidak cocok.");
-      return;
-    }
-
-    // Belum menyimpan password ke server.
-    // Hubungkan ke API backend setelah endpoint tersedia.
-    setSuccess("Validasi berhasil. Hubungkan ke API untuk menyimpan password.");
   }
 
   return (
@@ -598,11 +610,13 @@ function ChangePasswordModal({ open, onClose }) {
           <div className="flex justify-end pt-1">
             <button
               type="submit"
-              className="rounded-md border border-white px-3 py-1.5
+              disabled={submitting}
+              className="inline-flex items-center gap-1 rounded-md border border-white px-3 py-1.5
                          text-[11px] transition hover:bg-white
-                         hover:text-[#003D32]"
+                         hover:text-[#003D32] disabled:opacity-60"
             >
-              Ganti Password
+              {submitting && <LoaderCircle size={12} className="animate-spin" aria-hidden="true" />}
+              {submitting ? "Menyimpan..." : "Ganti Password"}
             </button>
           </div>
         </form>
