@@ -16,7 +16,6 @@ import {
   LogOut,
   Menu,
   MessageSquare,
-  Pencil,
   Presentation,
   RefreshCw,
   ScanQrCode,
@@ -38,6 +37,7 @@ import Teachers from "../TeachersPage/Teachers.jsx";
 import Classes from "../ClassesPage/Classes.jsx";
 import Extracurricular from "../ExtracurricularPage/Extracurricular.jsx";
 import Schedules from "../SchedulesPage/Schedules.jsx";
+import Profile from "../ProfilePage/Profile.jsx";
 import { createDashboardData, getProfileView } from "./dashboardData.js";
 import { canManageSchoolData, canOpenDashboardView } from "../../services/access.js";
 
@@ -57,7 +57,7 @@ export default function Dashbord({
   profile,
   schoolName = "SMK Dharma Karya",
   onNavigate,
-  onEditProfile,
+  onProfileUpdated,
   onLogout,
 }) {
   const canManage = canManageSchoolData(profile);
@@ -162,13 +162,7 @@ export default function Dashbord({
           </>
         )}
         {active === "account" && (
-          <Profile
-            profile={profile}
-            canManage={canManage}
-            onEditProfile={
-              onEditProfile || (() => dispatchNavigation("edit-profile"))
-            }
-          />
+          <Profile profile={profile} onProfileUpdated={onProfileUpdated} />
         )}
         {active === "data_siswa" && (
           <Students
@@ -613,103 +607,6 @@ function ChangePasswordModal({ open, onClose }) {
           </div>
         </form>
       </section>
-    </div>
-  );
-}
-
-function Profile({ profile = {}, onEditProfile, canManage = false }) {
-  const [failedPhoto, setFailedPhoto] = useState(null);
-  const user = getProfileView(profile);
-
-  return (
-    <section className="relative min-h-full rounded-xl bg-white px-3 pb-4 pt-0 text-[#003D32]">
-      {/* Judul profil */}
-      <section
-        className="relative z-10 -mt-1 rounded-[20px]
-                          border border-gray-200 bg-white
-                          px-3 py-3 text-center
-                          shadow-[0_2px_4px_rgba(0,0,0,0.22)]"
-      >
-        <h1 className="text-[23px] font-bold leading-tight">Profil Saya</h1>
-        <p className="text-[10px]">Kelola informasi data diri Anda</p>
-      </section>
-
-      {/* Informasi pribadi */}
-      <section className="mt-[-9px]">
-        <div className="pt-3 text-center">
-          <h2
-            className="inline-flex rounded-full bg-[#005343]
-                         px-3 py-1 text-sm font-bold text-white"
-          >
-            Informasi Pribadi
-          </h2>
-        </div>
-
-        <div className="mt-5 flex justify-center">
-          {user.photo && failedPhoto !== user.photo ? (
-            <img
-              src={user.photo}
-              alt="Foto profil"
-              onError={() => setFailedPhoto(user.photo)}
-              className="h-[84px] w-[84px] rounded-full
-                       border-2 border-gray-300 object-cover"
-            />
-          ) : (
-            <span className="flex h-[84px] w-[84px] items-center justify-center rounded-full bg-school-100">
-              <UserRound size={40} aria-label="Foto profil belum tersedia" />
-            </span>
-          )}
-        </div>
-
-        <div className="mt-4 space-y-1 text-[10px]">
-          <ProfileRow label="Nomor Identitas" value={user.identifier} />
-          <ProfileRow label="Nama" value={user.name} />
-          <ProfileRow label="Tempat tanggal lahir" value={user.birthDate} />
-          <ProfileRow label="Tipe" value={user.type} />
-          <ProfileRow label="Status" value={user.status} />
-        </div>
-      </section>
-
-      {/* Informasi kontak */}
-      <section className="mt-3">
-        <div className="text-center">
-          <h2
-            className="inline-flex rounded-full bg-[#005343]
-                         px-3 py-1 text-sm font-bold text-white"
-          >
-            Informasi Kontak
-          </h2>
-        </div>
-
-        <div className="mt-2 space-y-1 text-[10px]">
-          <ProfileRow label="Alamat" value={user.address} />
-          <ProfileRow label="No Telp" value={user.phone} />
-        </div>
-      </section>
-
-      {/* Tombol edit profil */}
-      {canManage && <button
-        type="button"
-        onClick={onEditProfile}
-        className="mt-6 w-full
-                   flex items-center justify-center gap-1
-                   rounded-sm bg-[#003D32] py-1.5
-                   text-[10px] font-semibold text-white
-                   shadow-sm transition hover:bg-[#005343]"
-      >
-        <Pencil size={11} />
-        Edit Profil
-      </button>}
-    </section>
-  );
-}
-
-function ProfileRow({ label, value }) {
-  return (
-    <div className="grid grid-cols-[80px_8px_1fr] items-start gap-1">
-      <span>{label}</span>
-      <span>:</span>
-      <span className="break-words">{value || "-"}</span>
     </div>
   );
 }
