@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Dashbord from "./pages/DashboardPage/Dashbord.jsx";
 import Login from "./pages/LoginPage/Login.jsx";
+import PageLoader from "./components/PageLoader.jsx";
 import { authApi, clearAuthSession, saveAuthSession } from "./services/auth.js";
 import { APP_ROUTES, getRequestedRoute, resolveAppRoute } from "./routes.js";
 
@@ -122,11 +123,15 @@ export default function App() {
     navigate(APP_ROUTES.login, { replace: true });
   }
 
-  if (!session && !isPublicRoute && (checkingSession || sessionError)) {
+  if (!session && !isPublicRoute && checkingSession && !sessionError) {
+    return <PageLoader fullScreen label="Memeriksa sesi login" />;
+  }
+
+  if (!session && !isPublicRoute && sessionError) {
     return (
       <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center gap-4 bg-white px-6 text-center">
-        <p role={sessionError ? "alert" : "status"}>
-          {sessionError ? "Tidak dapat memeriksa sesi. Periksa koneksi lalu coba lagi." : "Memeriksa sesi login..."}
+        <p role="alert">
+          Tidak dapat memeriksa sesi. Periksa koneksi lalu coba lagi.
         </p>
         {sessionError && (
           <button type="button" onClick={() => setRetryCount((count) => count + 1)} className="rounded-md bg-school-900 px-5 py-2 text-white">
