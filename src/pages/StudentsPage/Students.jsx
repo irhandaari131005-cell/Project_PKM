@@ -3,12 +3,14 @@ import { createPortal } from "react-dom";
 import {
   CircleUserRound,
   LoaderCircle,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
+  Trash2,
   X,
 } from "lucide-react";
-import { studentsApi, getStudentError } from "../../services/students.js";
+import { studentsApi, getStudentError, STUDENT_STATUSES } from "../../services/students.js";
 import { formatCount } from "../DashboardPage/dashboardData.js";
 import { getStudentCard, normalizeStudentsList } from "./studentData.js";
 
@@ -35,6 +37,8 @@ export default function Students({ initialTotal = null, onStudentCreated, canMan
   const [revision, setRevision] = useState(0);
   const [classesRevision, setClassesRevision] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
+  // Record siswa yang sedang diedit (null = tidak ada form edit terbuka).
+  const [editing, setEditing] = useState(null);
   const [success, setSuccess] = useState("");
   const queryKey = JSON.stringify(filters);
 
@@ -119,6 +123,17 @@ export default function Students({ initialTotal = null, onStudentCreated, canMan
     setSearch("");
     setFilters({ search: "", page: 1 });
     setRevision((previous) => previous + 1);
+    onStudentCreated?.();
+  }
+
+  // Ubah/hapus: tetap di pencarian yang sama; setelah hapus kembali ke halaman 1
+  // agar tidak tertinggal di halaman yang sudah kosong.
+  function studentChanged(result, { deleted = false } = {}) {
+    setEditing(null);
+    setSuccess(result.message);
+    if (deleted) setFilters((previous) => ({ ...previous, page: 1 }));
+    setRevision((previous) => previous + 1);
+    // Jumlah siswa di Dashboard ikut diperbarui.
     onStudentCreated?.();
   }
 
@@ -243,6 +258,10 @@ export default function Students({ initialTotal = null, onStudentCreated, canMan
                   key={`${record.id_siswa ?? record.id ?? visible.currentPage}-${index}`}
                   record={record}
                   classes={classes.items}
+                  onEdit={canManage && record.id_siswa != null ? () => {
+                    setSuccess("");
+                    setEditing(record);
+                  } : undefined}
                 />
               ))}
             </ul>
@@ -286,11 +305,21 @@ export default function Students({ initialTotal = null, onStudentCreated, canMan
         )}
       </div>
       {canManage && createOpen && (
-        <CreateStudentModal
+        <StudentModal
           classes={classes}
           onRetryClasses={() => setClassesRevision((previous) => previous + 1)}
           onClose={() => setCreateOpen(false)}
-          onCreated={studentCreated}
+          onSaved={studentCreated}
+        />
+      )}
+      {canManage && editing && (
+        <StudentModal
+          record={editing}
+          classes={classes}
+          onRetryClasses={() => setClassesRevision((previous) => previous + 1)}
+          onClose={() => setEditing(null)}
+          onSaved={(result) => studentChanged(result)}
+          onDeleted={(result) => studentChanged(result, { deleted: true })}
         />
       )}
     </section>
@@ -310,7 +339,7 @@ function SummaryCount({ label, value }) {
   );
 }
 
-function StudentCard({ record, classes }) {
+function StudentCard({ record, classes, onEdit }) {
   const student = getStudentCard(record, classes);
   return (
     <li className="rounded-[10px] border border-[#003D32] bg-[#005343] px-3 py-1.5 text-white min-[380px]:py-2">
@@ -337,9 +366,22 @@ function StudentCard({ record, classes }) {
           {student.status}
         </span>
       </div>
-      <p className="mt-1 border-t border-white/60 pt-1 text-[9px] leading-tight min-[380px]:text-[10px]">
-        Kelas: {student.className}
-      </p>
+      <div className="mt-1 flex items-center justify-between gap-2 border-t border-white/60 pt-1">
+        <p className="text-[9px] leading-tight min-[380px]:text-[10px]">
+          Kelas: {student.className}
+        </p>
+        {onEdit && (
+          <button
+            type="button"
+            aria-label={`Edit siswa ${student.name}`}
+            onClick={onEdit}
+            className="flex shrink-0 items-center gap-1 rounded bg-white px-2 py-0.5 text-[10px] font-semibold text-[#003D32] hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+          >
+            <Pencil size={11} aria-hidden="true" />
+            Edit
+          </button>
+        )}
+      </div>
     </li>
   );
 }
@@ -363,15 +405,28 @@ function RequestError({ message, onRetry }) {
   );
 }
 
-function CreateStudentModal({ classes, onRetryClasses, onClose, onCreated }) {
-  const [values, setValues] = useState({
-    nama_siswa: "",
-    nis: "",
-    id_kelas: "",
-    sn: "",
-  });
+function fieldText(value) {
+  return typeof value === "string" ? value : typeof value === "number" ? String(value) : "";
+}
+
+/** Form tambah siswa, atau ubah + hapus bila `record` diberikan (khusus guru). */
+function StudentModal({ record = null, classes, onRetryClasses, onClose, onSaved, onDeleted }) {
+  const editing = record !== null;
+  // Backend mengirim has_account; data lama tanpa penanda dianggap berakun bila id_user terisi.
+  const hasAccount = editing && (typeof record.has_account === "boolean"
+    ? record.has_account
+    : fieldText(record.id_user).trim() !== "");
+  const prefix = editing ? "edit-student" : "create-student";
+  const [values, setValues] = useState(() => editing ? {
+    nama_siswa: fieldText(record.nama_siswa),
+    nis: fieldText(record.nis),
+    id_kelas: fieldText(record.id_kelas),
+    sn: fieldText(record.sn),
+    status: fieldText(record.status).toUpperCase() === "INACTIVE" ? "INACTIVE" : "ACTIVE",
+  } : { nama_siswa: "", nis: "", id_kelas: "", sn: "" });
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const pending = useRef(null);
   const dialog = useRef(null);
   const close = useRef(onClose);
@@ -419,30 +474,55 @@ function CreateStudentModal({ classes, onRetryClasses, onClose, onCreated }) {
     };
   }, []);
 
-  async function submit(event) {
-    event.preventDefault();
+  async function run(task, onDone, action) {
     if (pending.current) return;
     const controller = new AbortController();
     pending.current = controller;
     setSubmitting(true);
     setError(null);
     try {
-      const result = await studentsApi.create(values, {
-        signal: controller.signal,
-      });
+      const result = await task(controller.signal);
       if (controller.signal.aborted) return;
       pending.current = null;
-      onCreated(result);
+      setSubmitting(false);
+      onDone(result);
     } catch (requestError) {
-      if (!controller.signal.aborted)
-        setError(getStudentError(requestError, "save"));
-    } finally {
       if (!controller.signal.aborted) {
         pending.current = null;
         setSubmitting(false);
+        setConfirmDelete(false);
+        setError(getStudentError(requestError, action));
       }
     }
   }
+
+  function submit(event) {
+    event.preventDefault();
+    run(
+      (signal) => editing
+        ? studentsApi.update(record.id_siswa, values, { signal })
+        : studentsApi.create(values, { signal }),
+      onSaved,
+      editing ? "update" : "save",
+    );
+  }
+
+  function remove() {
+    run((signal) => studentsApi.remove(record.id_siswa, { signal }), onDeleted, "delete");
+  }
+
+  const textFields = [
+    { name: "nama_siswa", label: "Nama siswa", autoComplete: "name", required: true },
+    { name: "nis", label: "NIS", autoComplete: "off", required: true },
+    {
+      name: "sn",
+      label: hasAccount ? "Nomor kartu (SN)" : "Nomor kartu (SN, opsional)",
+      autoComplete: "off",
+      required: hasAccount,
+      hint: hasAccount ? "Dipakai untuk absensi dan Lupa password akun siswa ini." : undefined,
+    },
+  ];
+  const title = editing ? "Edit Data Siswa" : "Tambah Data Siswa";
 
   return createPortal(
     <div
@@ -455,17 +535,17 @@ function CreateStudentModal({ classes, onRetryClasses, onClose, onCreated }) {
         ref={dialog}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="create-student-title"
+        aria-labelledby={`${prefix}-title`}
         tabIndex={-1}
         className="max-h-[calc(100dvh-32px)] w-full max-w-[398px] overflow-y-auto rounded-2xl bg-white p-5 text-[#003D32] shadow-2xl"
       >
         <div className="mb-5 flex items-center justify-between gap-3">
-          <h2 id="create-student-title" className="text-xl font-bold">
-            Tambah Data Siswa
+          <h2 id={`${prefix}-title`} className="text-xl font-bold">
+            {title}
           </h2>
           <button
             type="button"
-            aria-label="Tutup form tambah siswa"
+            aria-label={editing ? "Tutup form edit siswa" : "Tutup form tambah siswa"}
             disabled={submitting}
             onClick={onClose}
             className="rounded-lg p-1 hover:bg-emerald-50 disabled:opacity-40"
@@ -473,29 +553,26 @@ function CreateStudentModal({ classes, onRetryClasses, onClose, onCreated }) {
             <X size={22} />
           </button>
         </div>
+        {editing && (
+          <p className="-mt-3 mb-4 text-xs text-slate-600">
+            {hasAccount ? "Siswa ini sudah punya akun login. Nama dan nomor kartu di akun ikut diperbarui." : "Siswa ini belum punya akun login."}
+          </p>
+        )}
         <form onSubmit={submit} aria-busy={submitting}>
           <fieldset disabled={submitting} className="space-y-4">
-            {[
-              { name: "nama_siswa", label: "Nama siswa", autoComplete: "name" },
-              { name: "nis", label: "NIS", autoComplete: "off" },
-              {
-                name: "sn",
-                label: "Nomor kartu (SN, opsional)",
-                autoComplete: "off",
-              },
-            ].map(({ name, label, autoComplete }) => (
+            {textFields.map(({ name, label, autoComplete, required, hint }) => (
               <div key={name}>
                 <label
-                  htmlFor={`create-student-${name}`}
+                  htmlFor={`${prefix}-${name}`}
                   className="mb-1 block text-xs font-semibold"
                 >
                   {label}
                 </label>
                 <input
-                  id={`create-student-${name}`}
+                  id={`${prefix}-${name}`}
                   name={name}
                   type="text"
-                  required={name !== "sn"}
+                  required={required}
                   autoComplete={autoComplete}
                   value={values[name]}
                   onChange={(event) =>
@@ -507,30 +584,32 @@ function CreateStudentModal({ classes, onRetryClasses, onClose, onCreated }) {
                   aria-invalid={Boolean(error?.fields[name])}
                   aria-describedby={
                     error?.fields[name]
-                      ? `create-student-${name}-error`
-                      : undefined
+                      ? `${prefix}-${name}-error`
+                      : hint ? `${prefix}-${name}-hint` : undefined
                   }
                   className="h-11 w-full rounded-lg border border-slate-300 px-3 text-base outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20"
                 />
-                {error?.fields[name] && (
+                {error?.fields[name] ? (
                   <p
-                    id={`create-student-${name}-error`}
+                    id={`${prefix}-${name}-error`}
                     className="mt-1 text-xs text-red-700"
                   >
                     {error.fields[name]}
                   </p>
-                )}
+                ) : hint ? (
+                  <p id={`${prefix}-${name}-hint`} className="mt-1 text-[11px] text-slate-500">{hint}</p>
+                ) : null}
               </div>
             ))}
             <div>
               <label
-                htmlFor="create-student-id_kelas"
+                htmlFor={`${prefix}-id_kelas`}
                 className="mb-1 block text-xs font-semibold"
               >
                 Kelas
               </label>
               <select
-                id="create-student-id_kelas"
+                id={`${prefix}-id_kelas`}
                 name="id_kelas"
                 required
                 disabled={classes.loading || classes.items.length === 0}
@@ -544,7 +623,7 @@ function CreateStudentModal({ classes, onRetryClasses, onClose, onCreated }) {
                 aria-invalid={Boolean(error?.fields.id_kelas)}
                 aria-describedby={
                   error?.fields.id_kelas
-                    ? "create-student-id_kelas-error"
+                    ? `${prefix}-id_kelas-error`
                     : undefined
                 }
                 className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-base outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20 disabled:opacity-50"
@@ -560,13 +639,34 @@ function CreateStudentModal({ classes, onRetryClasses, onClose, onCreated }) {
               </select>
               {error?.fields.id_kelas && (
                 <p
-                  id="create-student-id_kelas-error"
+                  id={`${prefix}-id_kelas-error`}
                   className="mt-1 text-xs text-red-700"
                 >
                   {error.fields.id_kelas}
                 </p>
               )}
             </div>
+            {editing && (
+              <div>
+                <label htmlFor={`${prefix}-status`} className="mb-1 block text-xs font-semibold">
+                  Status
+                </label>
+                <select
+                  id={`${prefix}-status`}
+                  name="status"
+                  value={values.status}
+                  onChange={(event) => setValues((previous) => ({ ...previous, status: event.target.value }))}
+                  aria-invalid={Boolean(error?.fields.status)}
+                  aria-describedby={`${prefix}-status-hint`}
+                  className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-base outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20"
+                >
+                  {STUDENT_STATUSES.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+                </select>
+                <p id={`${prefix}-status-hint`} className="mt-1 text-[11px] text-slate-500">
+                  {error?.fields.status || "Siswa nonaktif (lulus/pindah) tidak bisa melakukan absensi."}
+                </p>
+              </div>
+            )}
           </fieldset>
           {classes.error && (
             <div className="mt-3">
@@ -589,26 +689,76 @@ function CreateStudentModal({ classes, onRetryClasses, onClose, onCreated }) {
               {error.message}
             </p>
           )}
-          <div className="mt-5 flex justify-end gap-2">
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={onClose}
-              className="rounded-lg border border-emerald-900/30 px-4 py-2 text-sm disabled:opacity-50"
+          {confirmDelete ? (
+            <div
+              role="alertdialog"
+              aria-labelledby={`${prefix}-delete-title`}
+              className="mt-5 rounded-lg border border-red-200 bg-red-50 p-3 text-red-900"
             >
-              Batal
-            </button>
-            <button
-              type="submit"
-              disabled={submitting || classes.loading || !classes.items.length}
-              className="flex items-center gap-2 rounded-lg bg-[#005343] px-4 py-2 text-sm text-white hover:bg-[#003D32] disabled:opacity-50"
-            >
-              {submitting && (
-                <LoaderCircle size={15} className="animate-spin" />
+              <p id={`${prefix}-delete-title`} className="text-sm font-semibold">
+                Hapus siswa "{fieldText(record?.nama_siswa)}"?
+              </p>
+              <p className="mt-1 text-xs">
+                {hasAccount
+                  ? "Akun login siswa ini juga akan dihapus. Siswa yang sudah punya riwayat absensi tidak dapat dihapus; ubah statusnya menjadi Nonaktif."
+                  : "Data yang dihapus tidak dapat dikembalikan."}
+              </p>
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => setConfirmDelete(false)}
+                  className="rounded-lg border border-red-900/30 bg-white px-4 py-2 text-sm disabled:opacity-50"
+                >
+                  Tidak
+                </button>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={remove}
+                  className="flex items-center gap-2 rounded-lg bg-red-700 px-4 py-2 text-sm text-white hover:bg-red-800 disabled:opacity-50"
+                >
+                  {submitting && <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />}
+                  {submitting ? "Menghapus..." : "Ya, hapus"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-5 flex items-center justify-end gap-2">
+              {editing && (
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => {
+                    setError(null);
+                    setConfirmDelete(true);
+                  }}
+                  className="mr-auto flex items-center gap-1 rounded-lg border border-red-700 px-3 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+                >
+                  <Trash2 size={15} aria-hidden="true" />
+                  Hapus
+                </button>
               )}
-              {submitting ? "Menyimpan..." : "Simpan siswa"}
-            </button>
-          </div>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={onClose}
+                className="rounded-lg border border-emerald-900/30 px-4 py-2 text-sm disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={submitting || classes.loading || !classes.items.length}
+                className="flex items-center gap-2 rounded-lg bg-[#005343] px-4 py-2 text-sm text-white hover:bg-[#003D32] disabled:opacity-50"
+              >
+                {submitting && (
+                  <LoaderCircle size={15} className="animate-spin" />
+                )}
+                {submitting ? "Menyimpan..." : editing ? "Simpan perubahan" : "Simpan siswa"}
+              </button>
+            </div>
+          )}
         </form>
       </section>
     </div>,

@@ -3,12 +3,14 @@ import { createPortal } from "react-dom";
 import {
   CircleUserRound,
   LoaderCircle,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
+  Trash2,
   X,
 } from "lucide-react";
-import { teachersApi, getTeacherError } from "../../services/teachers.js";
+import { teachersApi, getTeacherError, TEACHER_STATUSES } from "../../services/teachers.js";
 import { getTeacherCard, normalizeTeachersList } from "./teacherData.js";
 
 const initialList = {
@@ -20,12 +22,14 @@ const initialList = {
   key: "",
 };
 
-export default function Teachers({ onTeacherCreated, canManage = false }) {
+export default function Teachers({ onTeacherCreated, canManage = false, currentUserId = null }) {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({ search: "", page: 1 });
   const [list, setList] = useState(initialList);
   const [revision, setRevision] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
+  // Record guru yang sedang diedit (null = tidak ada form edit terbuka).
+  const [editing, setEditing] = useState(null);
   const [success, setSuccess] = useState("");
   const queryKey = JSON.stringify(filters);
 
@@ -81,6 +85,16 @@ export default function Teachers({ onTeacherCreated, canManage = false }) {
     setSearch("");
     setFilters({ search: "", page: 1 });
     setRevision((previous) => previous + 1);
+    onTeacherCreated?.();
+  }
+
+  // Ubah/hapus: tetap di pencarian yang sama; setelah hapus kembali ke halaman 1.
+  function teacherChanged(result, { deleted = false } = {}) {
+    setEditing(null);
+    setSuccess(result.message);
+    if (deleted) setFilters((previous) => ({ ...previous, page: 1 }));
+    setRevision((previous) => previous + 1);
+    // Jumlah guru di Dashboard ikut diperbarui.
     onTeacherCreated?.();
   }
 
@@ -194,6 +208,10 @@ export default function Teachers({ onTeacherCreated, canManage = false }) {
                 <TeacherCard
                   key={`${record.id_guru ?? record.id ?? visible.currentPage}-${index}`}
                   record={record}
+                  onEdit={canManage && (record.id_guru ?? record.id_user) != null ? () => {
+                    setSuccess("");
+                    setEditing(record);
+                  } : undefined}
                 />
               ))}
             </ul>
@@ -237,16 +255,25 @@ export default function Teachers({ onTeacherCreated, canManage = false }) {
         )}
       </div>
       {canManage && createOpen && (
-        <CreateTeacherModal
+        <TeacherModal
           onClose={() => setCreateOpen(false)}
-          onCreated={teacherCreated}
+          onSaved={teacherCreated}
+        />
+      )}
+      {canManage && editing && (
+        <TeacherModal
+          record={editing}
+          isSelf={currentUserId != null && String(editing.id_guru ?? editing.id_user) === String(currentUserId)}
+          onClose={() => setEditing(null)}
+          onSaved={(result) => teacherChanged(result)}
+          onDeleted={(result) => teacherChanged(result, { deleted: true })}
         />
       )}
     </section>
   );
 }
 
-function TeacherCard({ record }) {
+function TeacherCard({ record, onEdit }) {
   const teacher = getTeacherCard(record);
   return (
     <li className="rounded-[10px] border border-[#003D32] bg-[#005343] px-3 py-1.5 text-white min-[380px]:py-2">
@@ -273,9 +300,22 @@ function TeacherCard({ record }) {
           {teacher.status}
         </span>
       </div>
-      <p className="mt-1 border-t border-white/60 pt-1 text-[9px] leading-tight min-[380px]:text-[10px]">
-        Mata Pelajaran: {teacher.subject}
-      </p>
+      <div className="mt-1 flex items-center justify-between gap-2 border-t border-white/60 pt-1">
+        <p className="text-[9px] leading-tight min-[380px]:text-[10px]">
+          Mata Pelajaran: {teacher.subject}
+        </p>
+        {onEdit && (
+          <button
+            type="button"
+            aria-label={`Edit guru ${teacher.name}`}
+            onClick={onEdit}
+            className="flex shrink-0 items-center gap-1 rounded bg-white px-2 py-0.5 text-[10px] font-semibold text-[#003D32] hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
+          >
+            <Pencil size={11} aria-hidden="true" />
+            Edit
+          </button>
+        )}
+      </div>
     </li>
   );
 }
@@ -299,22 +339,26 @@ function RequestError({ message, onRetry }) {
   );
 }
 
-const formFields = [
-  { name: "nama", label: "Nama guru", autoComplete: "name" },
-  { name: "nip", label: "NIP", autoComplete: "off" },
-  { name: "mata_pelajaran", label: "Mata pelajaran", autoComplete: "off" },
-  { name: "sn", label: "Nomor kartu (SN, opsional)", autoComplete: "off" },
-];
+function fieldText(value) {
+  return typeof value === "string" ? value : typeof value === "number" ? String(value) : "";
+}
 
-function CreateTeacherModal({ onClose, onCreated }) {
-  const [values, setValues] = useState({
-    nama: "",
-    nip: "",
-    mata_pelajaran: "",
-    sn: "",
-  });
+/** Form tambah guru, atau ubah + hapus bila `record` diberikan (khusus guru). */
+function TeacherModal({ record = null, isSelf = false, onClose, onSaved, onDeleted }) {
+  const editing = record !== null;
+  // Backend mengirim has_account; data guru tanpa akun memakai UUID sementara sebagai id_guru.
+  const hasAccount = editing && (isSelf || record.has_account === true);
+  const prefix = editing ? "edit-teacher" : "create-teacher";
+  const [values, setValues] = useState(() => editing ? {
+    nama: fieldText(record.nama),
+    nip: fieldText(record.nip),
+    mata_pelajaran: fieldText(record.mata_pelajaran),
+    sn: fieldText(record.sn),
+    status: fieldText(record.status).toUpperCase() === "INACTIVE" ? "INACTIVE" : "ACTIVE",
+  } : { nama: "", nip: "", mata_pelajaran: "", sn: "" });
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const pending = useRef(null);
   const dialog = useRef(null);
   const close = useRef(onClose);
@@ -333,7 +377,7 @@ function CreateTeacherModal({ onClose, onCreated }) {
       if (event.key === "Tab") {
         const focusable = [
           ...dialog.current.querySelectorAll(
-            "button:not(:disabled), input:not(:disabled)",
+            "button:not(:disabled), input:not(:disabled), select:not(:disabled)",
           ),
         ];
         const first = focusable[0];
@@ -362,29 +406,55 @@ function CreateTeacherModal({ onClose, onCreated }) {
     };
   }, []);
 
-  async function submit(event) {
-    event.preventDefault();
+  async function run(task, onDone, action) {
     if (pending.current) return;
     const controller = new AbortController();
     pending.current = controller;
     setSubmitting(true);
     setError(null);
     try {
-      const result = await teachersApi.create(values, {
-        signal: controller.signal,
-      });
+      const result = await task(controller.signal);
       if (controller.signal.aborted) return;
       pending.current = null;
       setSubmitting(false);
-      onCreated(result);
+      onDone(result);
     } catch (requestError) {
       if (!controller.signal.aborted) {
         pending.current = null;
         setSubmitting(false);
-        setError(getTeacherError(requestError, "save"));
+        setConfirmDelete(false);
+        setError(getTeacherError(requestError, action));
       }
     }
   }
+
+  const teacherId = editing ? record.id_guru ?? record.id_user : null;
+  function submit(event) {
+    event.preventDefault();
+    run(
+      (signal) => editing
+        ? teachersApi.update(teacherId, values, { signal })
+        : teachersApi.create(values, { signal }),
+      onSaved,
+      editing ? "update" : "save",
+    );
+  }
+
+  function remove() {
+    run((signal) => teachersApi.remove(teacherId, { signal }), onDeleted, "delete");
+  }
+
+  const formFields = [
+    { name: "nama", label: "Nama guru", autoComplete: "name", required: true },
+    { name: "nip", label: "NIP", autoComplete: "off", required: true },
+    { name: "mata_pelajaran", label: "Mata pelajaran", autoComplete: "off", required: true },
+    {
+      name: "sn",
+      label: hasAccount ? "Nomor kartu (SN)" : "Nomor kartu (SN, opsional)",
+      autoComplete: "off",
+      required: hasAccount,
+    },
+  ];
 
   return createPortal(
     <div
@@ -397,17 +467,17 @@ function CreateTeacherModal({ onClose, onCreated }) {
         ref={dialog}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="create-teacher-title"
+        aria-labelledby={`${prefix}-title`}
         tabIndex={-1}
         className="max-h-[calc(100dvh-32px)] w-full max-w-[398px] overflow-y-auto rounded-2xl bg-white p-5 text-[#003D32] shadow-2xl"
       >
         <div className="mb-5 flex items-center justify-between gap-3">
-          <h2 id="create-teacher-title" className="text-xl font-bold">
-            Tambah Data Guru
+          <h2 id={`${prefix}-title`} className="text-xl font-bold">
+            {editing ? "Edit Data Guru" : "Tambah Data Guru"}
           </h2>
           <button
             type="button"
-            aria-label="Tutup form tambah guru"
+            aria-label={editing ? "Tutup form edit guru" : "Tutup form tambah guru"}
             disabled={submitting}
             onClick={onClose}
             className="rounded-lg p-1 hover:bg-emerald-50 disabled:opacity-40"
@@ -415,21 +485,30 @@ function CreateTeacherModal({ onClose, onCreated }) {
             <X size={22} />
           </button>
         </div>
+        {editing && (
+          <p className="-mt-3 mb-4 text-xs text-slate-600">
+            {isSelf
+              ? "Ini data guru milik akun Anda. Nama dan nomor kartu di akun ikut diperbarui."
+              : hasAccount
+                ? "Guru ini sudah punya akun login. Nama dan nomor kartu di akun ikut diperbarui."
+                : "Guru ini belum punya akun login."}
+          </p>
+        )}
         <form onSubmit={submit} aria-busy={submitting}>
           <fieldset disabled={submitting} className="space-y-4">
-            {formFields.map(({ name, label, autoComplete }) => (
+            {formFields.map(({ name, label, autoComplete, required }) => (
               <div key={name}>
                 <label
-                  htmlFor={`create-teacher-${name}`}
+                  htmlFor={`${prefix}-${name}`}
                   className="mb-1 block text-xs font-semibold"
                 >
                   {label}
                 </label>
                 <input
-                  id={`create-teacher-${name}`}
+                  id={`${prefix}-${name}`}
                   name={name}
                   type="text"
-                  required={name !== "sn"}
+                  required={required}
                   autoComplete={autoComplete}
                   value={values[name]}
                   onChange={(event) =>
@@ -441,14 +520,14 @@ function CreateTeacherModal({ onClose, onCreated }) {
                   aria-invalid={Boolean(error?.fields[name])}
                   aria-describedby={
                     error?.fields[name]
-                      ? `create-teacher-${name}-error`
+                      ? `${prefix}-${name}-error`
                       : undefined
                   }
                   className="h-11 w-full rounded-lg border border-slate-300 px-3 text-base outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20"
                 />
                 {error?.fields[name] && (
                   <p
-                    id={`create-teacher-${name}-error`}
+                    id={`${prefix}-${name}-error`}
                     className="mt-1 text-xs text-red-700"
                   >
                     {error.fields[name]}
@@ -456,6 +535,24 @@ function CreateTeacherModal({ onClose, onCreated }) {
                 )}
               </div>
             ))}
+            {editing && (
+              <div>
+                <label htmlFor={`${prefix}-status`} className="mb-1 block text-xs font-semibold">
+                  Status
+                </label>
+                <select
+                  id={`${prefix}-status`}
+                  name="status"
+                  value={values.status}
+                  onChange={(event) => setValues((previous) => ({ ...previous, status: event.target.value }))}
+                  aria-invalid={Boolean(error?.fields.status)}
+                  className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-base outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20"
+                >
+                  {TEACHER_STATUSES.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+                </select>
+                {error?.fields.status && <p className="mt-1 text-xs text-red-700">{error.fields.status}</p>}
+              </div>
+            )}
           </fieldset>
           {error && (
             <p
@@ -465,26 +562,75 @@ function CreateTeacherModal({ onClose, onCreated }) {
               {error.message}
             </p>
           )}
-          <div className="mt-5 flex justify-end gap-2">
-            <button
-              type="button"
-              disabled={submitting}
-              onClick={onClose}
-              className="rounded-lg border border-emerald-900/30 px-4 py-2 text-sm disabled:opacity-50"
+          {confirmDelete ? (
+            <div
+              role="alertdialog"
+              aria-labelledby={`${prefix}-delete-title`}
+              className="mt-5 rounded-lg border border-red-200 bg-red-50 p-3 text-red-900"
             >
-              Batal
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex items-center gap-2 rounded-lg bg-[#005343] px-4 py-2 text-sm text-white hover:bg-[#003D32] disabled:opacity-50"
-            >
-              {submitting && (
-                <LoaderCircle size={15} className="animate-spin" />
+              <p id={`${prefix}-delete-title`} className="text-sm font-semibold">
+                Hapus guru "{fieldText(record?.nama)}"?
+              </p>
+              <p className="mt-1 text-xs">
+                Akun login guru ini (jika ada) ikut dihapus. Kelas, jadwal, dan ekstrakurikuler yang
+                memakai guru ini tetap ada, tetapi wali kelas/guru/pembinanya menjadi kosong.
+              </p>
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => setConfirmDelete(false)}
+                  className="rounded-lg border border-red-900/30 bg-white px-4 py-2 text-sm disabled:opacity-50"
+                >
+                  Tidak
+                </button>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={remove}
+                  className="flex items-center gap-2 rounded-lg bg-red-700 px-4 py-2 text-sm text-white hover:bg-red-800 disabled:opacity-50"
+                >
+                  {submitting && <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />}
+                  {submitting ? "Menghapus..." : "Ya, hapus"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-5 flex items-center justify-end gap-2">
+              {editing && !isSelf && (
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => {
+                    setError(null);
+                    setConfirmDelete(true);
+                  }}
+                  className="mr-auto flex items-center gap-1 rounded-lg border border-red-700 px-3 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+                >
+                  <Trash2 size={15} aria-hidden="true" />
+                  Hapus
+                </button>
               )}
-              {submitting ? "Menyimpan..." : "Simpan guru"}
-            </button>
-          </div>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={onClose}
+                className="rounded-lg border border-emerald-900/30 px-4 py-2 text-sm disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="flex items-center gap-2 rounded-lg bg-[#005343] px-4 py-2 text-sm text-white hover:bg-[#003D32] disabled:opacity-50"
+              >
+                {submitting && (
+                  <LoaderCircle size={15} className="animate-spin" />
+                )}
+                {submitting ? "Menyimpan..." : editing ? "Simpan perubahan" : "Simpan guru"}
+              </button>
+            </div>
+          )}
         </form>
       </section>
     </div>,

@@ -56,6 +56,35 @@ export function normalizeCreatedStudent(payload) {
   return { payload, record, message: message || "Data siswa berhasil ditambahkan." };
 }
 
+export const STUDENT_STATUSES = Object.freeze([
+  Object.freeze({ value: "ACTIVE", label: "Aktif" }),
+  Object.freeze({ value: "INACTIVE", label: "Nonaktif" }),
+]);
+
+/** Payload ubah siswa. SN kosong dikirim null (hapus kartu); backend menolak bila siswa sudah berakun. */
+export function buildStudentUpdatePayload(values = {}) {
+  const errors = {};
+  for (const [field, label] of [["nama_siswa", "Nama siswa"], ["nis", "NIS"], ["id_kelas", "Kelas"]]) {
+    if (typeof values?.[field] !== "string" || !values[field].trim()) errors[STUDENT_FIELDS[field]] = [`${label} wajib diisi.`];
+  }
+  if (values?.sn != null && typeof values.sn !== "string") errors[STUDENT_FIELDS.sn] = ["Nomor kartu harus berupa string."];
+  if (!STUDENT_STATUSES.some(({ value }) => value === values?.status)) errors.status = ["Pilih status Aktif atau Nonaktif."];
+  if (Object.keys(errors).length) throw validationError(errors);
+  return {
+    nama_siswa: values.nama_siswa.trim(),
+    nis: values.nis.trim(),
+    id_kelas: values.id_kelas.trim(),
+    sn: values.sn?.trim() || null,
+    status: values.status,
+  };
+}
+
+function studentPath(id) {
+  const value = typeof id === "number" ? String(id) : id;
+  if (typeof value !== "string" || !/^[1-9][0-9]*$/.test(value.trim())) throw validationError({ id_siswa: ["ID siswa tidak valid."] });
+  return `${STUDENTS_ENDPOINT.replace(/\/+$/, "")}/${value.trim()}`;
+}
+
 export const studentsApi = {
   async list(filters, { signal } = {}) {
     const payload = await request(STUDENTS_ENDPOINT, { method: "get", params: buildStudentSearchParams(filters), signal });
@@ -66,22 +95,45 @@ export const studentsApi = {
     const payload = await request(STUDENTS_ENDPOINT, { method: "post", data: buildStudentPayload(values), signal });
     return normalizeCreatedStudent(payload);
   },
+  async update(id, values, { signal } = {}) {
+    const payload = await request(studentPath(id), { method: "put", data: buildStudentUpdatePayload(values), signal });
+    assertStudentResponse(payload);
+    const record = payload?.data;
+    if (!record || typeof record !== "object" || Array.isArray(record)) throw new Error("Respons perubahan siswa belum sesuai.");
+    return { payload, record, message: typeof payload.message === "string" && payload.message.trim() ? payload.message.trim() : "Data siswa berhasil diperbarui." };
+  },
+  async remove(id, { signal } = {}) {
+    const payload = await request(studentPath(id), { method: "delete", signal });
+    assertStudentResponse(payload);
+    return { payload, message: typeof payload?.message === "string" && payload.message.trim() ? payload.message.trim() : "Data siswa berhasil dihapus." };
+  },
+};
+
+const STUDENT_ACTIONS = {
+  load: ["Data siswa belum dapat dimuat. Silakan coba lagi.", "Anda tidak memiliki akses ke data siswa."],
+  save: ["Data siswa belum dapat disimpan. Silakan coba lagi.", "Anda tidak memiliki izin menambah siswa."],
+  update: ["Perubahan data siswa belum dapat disimpan. Silakan coba lagi.", "Anda tidak memiliki izin mengubah data siswa."],
+  delete: ["Data siswa belum dapat dihapus. Silakan coba lagi.", "Anda tidak memiliki izin menghapus data siswa."],
 };
 
 export function getStudentError(error, action = "load") {
   const status = error.response?.status ?? error.status;
   const fields = {};
   if (status === 422) {
-    for (const [field, key] of [...Object.entries(STUDENT_FIELDS), ["search", "search"]]) {
+    for (const [field, key] of [...Object.entries(STUDENT_FIELDS), ["status", "status"], ["search", "search"]]) {
       const value = error.response?.data?.errors?.[key];
       const message = Array.isArray(value) ? value[0] : value;
       if (typeof message === "string") fields[field] = message;
     }
   }
-  let message = action === "save" ? "Data siswa belum dapat disimpan. Silakan coba lagi." : "Data siswa belum dapat dimuat. Silakan coba lagi.";
+  const [fallback, forbidden] = STUDENT_ACTIONS[action] ?? STUDENT_ACTIONS.load;
+  const serverMessage = typeof error.response?.data?.message === "string" ? error.response.data.message.trim() : "";
+  let message = fallback;
   if (status === 401) message = "Sesi berakhir. Silakan login kembali.";
-  else if (status === 403) message = action === "save" ? "Anda tidak memiliki izin menambah siswa." : "Anda tidak memiliki akses ke data siswa.";
-  else if (status === 409) message = "NIS atau nomor kartu sudah digunakan. Periksa kembali data siswa.";
+  else if (status === 403) message = forbidden;
+  else if (status === 404 && action !== "load") message = "Data siswa tidak ditemukan. Muat ulang daftar siswa.";
+  // Mis. "Siswa ini sudah memiliki riwayat absensi sehingga tidak dapat dihapus..."
+  else if (status === 409) message = serverMessage || "NIS atau nomor kartu sudah digunakan. Periksa kembali data siswa.";
   else if (status === 422) message = "Periksa kembali data yang diisi.";
   else if (status === 429) message = "Terlalu banyak permintaan. Silakan tunggu sebentar.";
   else if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") message = "Server belum merespons. Silakan periksa data sebelum mencoba lagi.";
