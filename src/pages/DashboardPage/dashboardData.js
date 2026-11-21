@@ -104,6 +104,45 @@ export function formatCount(value) {
   return value === null || value === undefined ? "—" : numberFormatter.format(value);
 }
 
+const insightText = (value) => (typeof value === "string" ? value.trim() : typeof value === "number" ? String(value) : "");
+const clock = (value) => (typeof value === "string" ? value.match(/(\d{2}:\d{2})(?::\d{2})?$/)?.[1] ?? "" : "");
+const list = (value) => (Array.isArray(value) ? value.filter((item) => item && typeof item === "object" && !Array.isArray(item)) : []);
+
+/** Data panel tambahan Dashboard; null bila ringkasan belum tersedia atau formatnya tidak dikenali. */
+export function getDashboardInsights(data) {
+  if (!data || typeof data !== "object" || !data.kehadiran) return null;
+  const count = (value) => nonNegativeInteger(value) ?? 0;
+  const mine = data.kehadiran_saya;
+  return {
+    attendance: {
+      present: count(data.kehadiran.hadir_hari_ini),
+      total: count(data.kehadiran.total_siswa),
+      left: count(data.kehadiran.sudah_pulang),
+      absent: count(data.kehadiran.belum_hadir),
+    },
+    trend: list(data.tren_kehadiran).map((day) => ({
+      date: insightText(day.tanggal).slice(0, 10), day: insightText(day.hari).toLowerCase(), present: count(day.hadir),
+    })),
+    schedule: list(data.jadwal_hari_ini).map((item) => ({
+      title: insightText(item.mata_pelajaran) || "—", start: clock(item.jam_mulai), end: clock(item.jam_selesai),
+      className: insightText(item.nama_kelas), teacher: insightText(item.nama_guru), room: insightText(item.ruangan),
+    })),
+    extracurriculars: list(data.ekskul_hari_ini).map((item) => ({
+      title: insightText(item.nama_ekstrakurikuler) || "—", start: clock(item.jam_mulai), end: clock(item.jam_selesai),
+      location: insightText(item.lokasi),
+    })),
+    latest: list(data.absensi_terbaru).map((item) => ({
+      name: insightText(item.nama_siswa) || "—", className: insightText(item.nama_kelas) || "Belum ada kelas",
+      checkIn: clock(item.check_in), checkOut: clock(item.check_out),
+    })),
+    mine: {
+      today: mine?.hari_ini ? { checkIn: clock(mine.hari_ini.check_in), checkOut: clock(mine.hari_ini.check_out) } : null,
+      week: count(mine?.minggu_ini),
+      month: count(mine?.bulan_ini),
+    },
+  };
+}
+
 /** Kartu Kehadiran & Ekskul dari /api/dashboard/ringkasan; "—" bila belum/gagal dimuat. */
 export function summaryStats(summary = {}) {
   const { data, loading = false, error = "" } = summary ?? {};

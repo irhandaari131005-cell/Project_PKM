@@ -8,7 +8,7 @@ import { ActivityError, ActivityFacts, ActivityLoading } from "./SchoolActivityC
 const initialList = { items: [], loading: true, error: null, currentPage: 1, lastPage: 1, key: "" };
 const filterClass = "h-9 min-w-0 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-[#003D32] outline-none focus:ring-2 focus:ring-emerald-300";
 
-export default function SchoolActivitiesPage({ config }) {
+export default function SchoolActivitiesPage({ config, canManage = false }) {
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({ search: "", hari: "", ...(config.withClass ? { id_kelas: "" } : {}), page: 1 });
   const [list, setList] = useState(initialList);
@@ -52,7 +52,19 @@ export default function SchoolActivitiesPage({ config }) {
   function filter(name, value) {
     setFilters((previous) => ({ ...previous, [name]: value, search: search.trim(), page: 1 }));
   }
-  function open(mode, id) { setSuccess(""); setDialog({ mode, id }); }
+  // Siswa hanya melihat detail; tambah/ubah/hapus khusus guru (backend juga menolak dengan 403).
+  function open(mode, id) {
+    if (mode !== "detail" && !canManage) return;
+    setSuccess("");
+    setDialog({ mode, id });
+  }
+  function deleted() {
+    setDialog(null);
+    setSuccess(`${config.title} berhasil dihapus.`);
+    // Halaman terakhir bisa jadi kosong setelah data dihapus: kembali ke halaman 1.
+    setFilters((value) => ({ ...value, page: 1 }));
+    setRevision((value) => value + 1);
+  }
   function saved(created) {
     setDialog(null);
     setSuccess(`${config.title} berhasil ${created ? "ditambahkan" : "diperbarui"}.`);
@@ -98,7 +110,7 @@ export default function SchoolActivitiesPage({ config }) {
           </div>}
         </div>
         {classes.error && <div className="mt-2"><ActivityError message={`Pilihan kelas: ${classes.error.message}`} onRetry={() => setClassRevision((value) => value + 1)} /></div>}
-        <button type="button" aria-label={`Tambah ${config.title}`} onClick={() => open("create")} className="mt-3 flex min-h-9 w-full items-center justify-center gap-1 rounded-lg bg-white px-2 py-2 text-xs font-semibold hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-300"><Plus size={14} aria-hidden="true" />Tambah {config.title}</button>
+        {canManage && <button type="button" aria-label={`Tambah ${config.title}`} onClick={() => open("create")} className="mt-3 flex min-h-9 w-full items-center justify-center gap-1 rounded-lg bg-white px-2 py-2 text-xs font-semibold hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-300"><Plus size={14} aria-hidden="true" />Tambah {config.title}</button>}
       </div>
       <div className="mx-3 mt-3">
         {success && <p role="status" className="mb-3 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-900">{success}</p>}
@@ -108,7 +120,7 @@ export default function SchoolActivitiesPage({ config }) {
           ) : <ul aria-label={`Daftar ${config.title}`} className={`${config.Card ? "space-y-4" : "space-y-2"} md:grid md:grid-cols-2 md:gap-3 md:space-y-0 xl:grid-cols-3`}>
             {visible.items.map((record) => {
               const item = config.view(record);
-              if (config.Card) return <config.Card key={item.id} item={item} onDetail={() => open("detail", item.id)} onEdit={() => open("edit", item.id)} />;
+              if (config.Card) return <config.Card key={item.id} item={item} onDetail={() => open("detail", item.id)} onEdit={canManage ? () => open("edit", item.id) : undefined} />;
               return <li key={item.id} className="rounded-xl border border-[#003D32] bg-[#005343] p-3 text-white min-[380px]:p-4">
                 <div className="flex items-start gap-2">
                   <config.Icon size={25} aria-hidden="true" className="mt-0.5 shrink-0" />
@@ -116,9 +128,9 @@ export default function SchoolActivitiesPage({ config }) {
                   {item.status && <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] ${item.status === "ACTIVE" ? "bg-emerald-100 text-emerald-950" : "bg-slate-200 text-slate-800"}`}>{item.status === "ACTIVE" ? "Aktif" : item.status === "INACTIVE" ? "Nonaktif" : item.status}</span>}
                 </div>
                 <ActivityFacts item={item} withClass={config.withClass} />
-                <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className={`mt-3 grid gap-3 ${canManage ? "grid-cols-2" : "grid-cols-1"}`}>
                   <button type="button" aria-label={`Detail ${item.title}`} onClick={() => open("detail", item.id)} className="flex min-h-8 items-center justify-center gap-1 rounded-md bg-white text-xs font-semibold text-[#003D32] hover:bg-emerald-50"><Eye size={14} aria-hidden="true" />Detail</button>
-                  <button type="button" aria-label={`Edit ${item.title}`} onClick={() => open("edit", item.id)} className="flex min-h-8 items-center justify-center gap-1 rounded-md bg-white text-xs font-semibold text-[#003D32] hover:bg-emerald-50"><Pencil size={13} aria-hidden="true" />Edit</button>
+                  {canManage && <button type="button" aria-label={`Edit ${item.title}`} onClick={() => open("edit", item.id)} className="flex min-h-8 items-center justify-center gap-1 rounded-md bg-white text-xs font-semibold text-[#003D32] hover:bg-emerald-50"><Pencil size={13} aria-hidden="true" />Edit</button>}
                 </div>
               </li>;
             })}
@@ -130,7 +142,7 @@ export default function SchoolActivitiesPage({ config }) {
           <button type="button" disabled={visible.currentPage >= visible.lastPage} onClick={() => setFilters((value) => ({ ...value, page: visible.currentPage + 1 }))} className="rounded-md border border-emerald-900/30 p-2 disabled:opacity-40">Berikutnya</button>
         </nav>}
       </div>
-      {dialog && <ActivityDialog config={config} initialMode={dialog.mode} id={dialog.id} onClose={() => setDialog(null)} onSaved={saved} />}
+      {dialog && <ActivityDialog config={config} canManage={canManage} initialMode={dialog.mode} id={dialog.id} onClose={() => setDialog(null)} onSaved={saved} onDeleted={deleted} />}
     </section>
   );
 }

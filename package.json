@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:ngrok": "vite --mode ngrok --port 5175 --strictPort",
     "build": "vite build",
     "test": "node --test",
     "preview": "vite preview"

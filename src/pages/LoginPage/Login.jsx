@@ -9,6 +9,7 @@ import {
   REGISTER_ROLES,
   normalizeLoginResponse,
 } from "../../services/auth.js";
+import ForgotPasswordDialog from "./ForgotPasswordDialog.jsx";
 
 // EDIT DI SINI: teks dan lokasi gambar pada halaman login.
 const LOGIN_CONTENT = {
@@ -33,6 +34,7 @@ export default function Login({ isRegister = false, onNavigate, onSuccess }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState({ message: "", fields: {} });
   const [success, setSuccess] = useState("");
+  const [forgotOpen, setForgotOpen] = useState(false);
   const pendingRequest = useRef(null);
   const registrationCompleted = useRef(false);
   const roles = isRegister ? REGISTER_ROLES : LOGIN_ROLES;
@@ -349,6 +351,21 @@ export default function Login({ isRegister = false, onNavigate, onSuccess }) {
                   {error.fields.password}
                 </p>
               )}
+              {!isRegister && (
+                <div className="mt-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError({ message: "", fields: {} });
+                      setSuccess("");
+                      setForgotOpen(true);
+                    }}
+                    className="rounded-sm text-[12px] text-[#0000ff] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700"
+                  >
+                    Lupa password?
+                  </button>
+                </div>
+              )}
             </div>
 
             {isRegister && (
@@ -420,6 +437,19 @@ export default function Login({ isRegister = false, onNavigate, onSuccess }) {
           </p>
         </form>
       </section>
+      {forgotOpen && !isRegister && (
+        <ForgotPasswordDialog
+          initialUsername={username.trim()}
+          onClose={() => setForgotOpen(false)}
+          onReset={(resetUsername) => {
+            setForgotOpen(false);
+            setUsername(resetUsername);
+            setPassword("");
+            setError({ message: "", fields: {} });
+            setSuccess("Password berhasil direset. Silakan login dengan password baru.");
+          }}
+        />
+      )}
     </main>
   );
 }

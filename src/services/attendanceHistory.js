@@ -20,19 +20,92 @@ export function isValidHistoryDate(value) {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
-export function buildHistoryParams({ id_kelas = "", tanggal, page = 1 }) {
+// Filter rentang: kelas, cari murid (nama/NIS), dari tanggal, sampai tanggal (maksimal 92 hari).
+export const MAX_HISTORY_RANGE_DAYS = 92;
+
+/** Jumlah hari (inklusif) antara dua tanggal YYYY-MM-DD. */
+export function historyDayCount(dari, sampai) {
+  return Math.round((Date.parse(`${sampai}T00:00:00Z`) - Date.parse(`${dari}T00:00:00Z`)) / 86400000) + 1;
+}
+
+/** Tanggal YYYY-MM-DD digeser sejumlah hari (kalender, tanpa pengaruh zona waktu). */
+export function shiftHistoryDate(value, days) {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/** Senin pada minggu tanggal tersebut. */
+export function startOfHistoryWeek(value) {
+  const day = new Date(`${value}T00:00:00Z`).getUTCDay();
+  return shiftHistoryDate(value, -((day + 6) % 7));
+}
+
+function invalidFilters(errors) {
+  const error = new Error("Filter riwayat absensi tidak valid.");
+  error.response = { status: 422, data: { errors } };
+  return error;
+}
+
+/**
+ * Parameter riwayat. Format lama `{ tanggal }` tetap didukung; format baru
+ * `{ dari, sampai, search }` dipakai halaman Riwayat Absensi (4 filter).
+ */
+export function buildHistoryParams(filters = {}) {
+  if (filters.dari !== undefined || filters.sampai !== undefined || filters.search !== undefined) {
+    return buildRangeParams(filters);
+  }
+  const { id_kelas = "", tanggal, page = 1 } = filters;
   const errors = {};
   if (!isValidHistoryDate(tanggal)) errors[HISTORY_FILTER_FIELDS.tanggal] = ["Pilih tanggal yang valid."];
   if (typeof id_kelas !== "string") errors[HISTORY_FILTER_FIELDS.id_kelas] = ["ID kelas harus berupa string."];
   if (!Number.isSafeInteger(page) || page < 1) errors[HISTORY_FILTER_FIELDS.page] = ["Halaman tidak valid."];
-  if (Object.keys(errors).length) {
-    const error = new Error("Filter riwayat absensi tidak valid.");
-    error.response = { status: 422, data: { errors } };
-    throw error;
-  }
+  if (Object.keys(errors).length) throw invalidFilters(errors);
   const params = { [HISTORY_FILTER_FIELDS.tanggal]: tanggal, [HISTORY_FILTER_FIELDS.page]: page };
   if (id_kelas.trim()) params[HISTORY_FILTER_FIELDS.id_kelas] = id_kelas.trim();
   return params;
+}
+
+function buildRangeParams({ id_kelas = "", search = "", dari, sampai, page = 1 }) {
+  const errors = {};
+  if (!isValidHistoryDate(dari)) errors.dari = ["Pilih tanggal awal yang valid."];
+  if (!isValidHistoryDate(sampai)) errors.sampai = ["Pilih tanggal akhir yang valid."];
+  if (!errors.dari && !errors.sampai) {
+    if (sampai < dari) errors.sampai = ["Tanggal akhir tidak boleh sebelum tanggal awal."];
+    else if (historyDayCount(dari, sampai) > MAX_HISTORY_RANGE_DAYS) errors.sampai = [`Rentang tanggal maksimal ${MAX_HISTORY_RANGE_DAYS} hari.`];
+  }
+  if (typeof id_kelas !== "string") errors.id_kelas = ["ID kelas harus berupa string."];
+  if (typeof search !== "string" || search.trim().length > 100) errors.search = ["Pencarian maksimal 100 karakter."];
+  if (!Number.isSafeInteger(page) || page < 1) errors.page = ["Halaman tidak valid."];
+  if (Object.keys(errors).length) throw invalidFilters(errors);
+  const params = { dari, sampai, page };
+  if (id_kelas.trim()) params.id_kelas = id_kelas.trim();
+  if (search.trim()) params.search = search.trim();
+  return params;
+}
+
+/** Rekap jumlah hadir per siswa dari respons backend; null bila backend belum mengirim rekap. */
+export function normalizeHistoryRecap(payload) {
+  const rekap = payload?.rekap ?? payload?.data?.rekap;
+  if (!rekap || typeof rekap !== "object" || !Array.isArray(rekap.siswa)) return null;
+  return {
+    dari: textValue(rekap.dari),
+    sampai: textValue(rekap.sampai),
+    days: nonNegativeInteger(rekap.jumlah_hari),
+    recordedDays: nonNegativeInteger(rekap.hari_tercatat),
+    total: nonNegativeInteger(rekap.total_siswa) ?? rekap.siswa.length,
+    students: rekap.siswa.filter((row) => row && typeof row === "object" && !Array.isArray(row)).map((row) => ({
+      id: textValue(row.id_siswa),
+      name: textValue(row.nama_siswa) || "—",
+      className: textValue(row.nama_kelas) || "Belum ada kelas",
+      present: nonNegativeInteger(row.jumlah_hadir) ?? 0,
+    })),
+  };
+}
+
+/** "07:05" dari "2026-11-21 07:05:12"; kosong bila tidak ada. */
+function clockTime(value) {
+  return typeof value === "string" ? value.match(/(\d{2}:\d{2})(?::\d{2})?$/)?.[1] ?? "" : "";
 }
 
 function nonNegativeInteger(value) {
@@ -90,6 +163,15 @@ export function getHistoryRow(record) {
   };
 }
 
+/** Tanggal dan jam masuk/pulang untuk baris riwayat ("07:05", "" bila belum pulang). */
+export function getHistoryTimes(record) {
+  return {
+    date: textValue(record?.tanggal).slice(0, 10),
+    checkIn: clockTime(record?.check_in),
+    checkOut: clockTime(record?.check_out),
+  };
+}
+
 export const attendanceHistoryApi = {
   async getClasses({ signal } = {}) {
     const items = [];
@@ -113,7 +195,7 @@ export const attendanceHistoryApi = {
   async getHistory(filters, { signal } = {}) {
     const params = buildHistoryParams(filters);
     const payload = await request(HISTORY_ENDPOINT, { method: "get", params, signal });
-    return normalizeHistoryCollection(payload, "riwayat", filters.page ?? 1);
+    return { ...normalizeHistoryCollection(payload, "riwayat", filters.page ?? 1), recap: normalizeHistoryRecap(payload) };
   },
 };
 
@@ -121,7 +203,7 @@ export function getHistoryError(error, label = "Riwayat absensi") {
   const status = error.response?.status;
   const fields = {};
   if (status === 422) {
-    for (const [field, key] of Object.entries(HISTORY_FILTER_FIELDS)) {
+    for (const [field, key] of Object.entries({ ...HISTORY_FILTER_FIELDS, search: "search", dari: "dari", sampai: "sampai" })) {
       const value = error.response?.data?.errors?.[key];
       const message = Array.isArray(value) ? value[0] : value;
       if (typeof message === "string") fields[field] = message;
@@ -130,7 +212,7 @@ export function getHistoryError(error, label = "Riwayat absensi") {
   let message = `${label} belum dapat dimuat. Silakan coba lagi.`;
   if (status === 401) message = "Sesi berakhir. Silakan login kembali.";
   else if (status === 403) message = `Anda tidak memiliki akses ke ${label.toLowerCase()}.`;
-  else if (status === 422) message = fields.tanggal || fields.id_kelas || fields.page || "Periksa kembali filter riwayat absensi.";
+  else if (status === 422) message = fields.tanggal || fields.dari || fields.sampai || fields.search || fields.id_kelas || fields.page || "Periksa kembali filter riwayat absensi.";
   else if (status === 429) message = "Terlalu banyak permintaan. Silakan tunggu sebentar.";
   else if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") message = `Waktu tunggu ${label.toLowerCase()} habis. Silakan coba lagi.`;
   else if (error.code === "ERR_NETWORK") message = "Tidak dapat terhubung ke server. Periksa koneksi Anda.";

@@ -21,6 +21,6 @@ const config = {
   ],
 };
 
-export default function Schedules() {
-  return <SchoolActivitiesPage config={config} />;
+export default function Schedules({ canManage = false }) {
+  return <SchoolActivitiesPage config={config} canManage={canManage} />;
 }

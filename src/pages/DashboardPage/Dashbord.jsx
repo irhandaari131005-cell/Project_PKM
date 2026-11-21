@@ -36,6 +36,7 @@ import Classes from "../ClassesPage/Classes.jsx";
 import Extracurricular from "../ExtracurricularPage/Extracurricular.jsx";
 import Schedules from "../SchedulesPage/Schedules.jsx";
 import Profile from "../ProfilePage/Profile.jsx";
+import DashboardInsights from "./DashboardInsights.jsx";
 import { createDashboardData, getProfileView } from "./dashboardData.js";
 import { canManageSchoolData, canOpenDashboardView } from "../../services/access.js";
 import { changePassword, getChangePasswordError } from "../../services/auth.js";
@@ -116,6 +117,21 @@ export default function Dashbord({
   }
 
   useEffect(() => () => window.clearTimeout(transitionTimer.current), []);
+
+  // Kembali ke Dashboard setelah absensi/tambah data: muat ulang angka agar tidak basi.
+  const firstDashboardView = useRef(true);
+  useEffect(() => {
+    if (active !== "dashboard") return;
+    if (firstDashboardView.current) {
+      firstDashboardView.current = false;
+      return;
+    }
+    summary.reload();
+    students.reload();
+    teachers.reload();
+    // Hanya saat menu Dashboard dibuka; fungsi reload berubah tiap render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   function handleNavigate(key) {
     setIsSidebarOpen(false);
@@ -200,6 +216,7 @@ export default function Dashbord({
             <div className="mt-3">
               <StatisticsGrid stats={dashboard.stats} />
             </div>
+            <DashboardInsights summary={summary} isTeacher={canManage} />
             {(students.loading || teachers.loading) && (
               <p
                 role="status"
@@ -224,11 +241,11 @@ export default function Dashbord({
           />
         )}
         {active === "data_guru" && (
-          <Teachers canManage={canManage} onTeacherCreated={teachers.reload} />
+          <Teachers canManage={canManage} currentUserId={profile?.id_user} onTeacherCreated={teachers.reload} />
         )}
         {active === "classes" && <Classes canManage={canManage} />}
-        {active === "extracurricular" && <Extracurricular />}
-        {active === "schedules" && <Schedules />}
+        {active === "extracurricular" && <Extracurricular canManage={canManage} />}
+        {active === "schedules" && <Schedules canManage={canManage} />}
         </div>
       </div>
 

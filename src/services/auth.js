@@ -7,6 +7,7 @@ const REGISTER_CLASSES_ENDPOINT = env.VITE_REGISTER_CLASSES_ENDPOINT || "/api/da
 const SESSION_ENDPOINT = env.VITE_SESSION_ENDPOINT || "/api/me";
 const LOGOUT_ENDPOINT = env.VITE_LOGOUT_ENDPOINT || "/api/logout";
 const CHANGE_PASSWORD_ENDPOINT = env.VITE_CHANGE_PASSWORD_ENDPOINT || "/api/change_password";
+const FORGOT_PASSWORD_ENDPOINT = env.VITE_FORGOT_PASSWORD_ENDPOINT || "/api/forgot_password";
 const USER_STORAGE_KEY = "auth_user";
 
 // Kontrak awal login: sesuaikan key dan nilai role ini dengan controller backend.
@@ -214,10 +215,17 @@ export function getLoginError(error) {
   const status = error.response?.status ?? error.status;
   const fields = getValidationFields(error, LOGIN_FIELDS);
   let message = "Login belum berhasil. Silakan coba lagi.";
-  if (status === 400 || status === 401 || status === 403) {
+  if (status === 400 || status === 401) {
     message = "Username, password, atau jenis akun tidak sesuai.";
+  } else if (status === 403) {
+    // Password benar tetapi tombol Guru/Siswa yang dipilih berbeda dengan akun terdaftar.
+    message = "Jenis akun tidak sesuai. Pilih Guru atau Siswa sesuai akun Anda.";
   } else if (status === 422) {
     message = "Periksa kembali data login Anda.";
+  } else if (status === 429) {
+    message = "Terlalu banyak percobaan login gagal. Tunggu 5 menit lalu coba lagi, atau gunakan Lupa password.";
+  } else if (status >= 500 && status <= 599) {
+    message = "Server sedang bermasalah. Silakan coba lagi nanti.";
   } else if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") {
     message = "Server belum merespons. Silakan coba lagi.";
   } else if (error.code === "ERR_NETWORK") {
@@ -327,6 +335,52 @@ export async function changePassword(values, { signal } = {}) {
   });
   assertAuthResponse(payload, "Password belum berhasil diubah.");
   return payload;
+}
+
+// ---- Lupa password (PATCH /api/forgot_password) -------------------------------
+// Reset dengan pasangan username + nomor kartu (SN) yang dipakai saat registrasi.
+export function buildForgotPasswordPayload({ username, sn, newPassword, confirmPassword }) {
+  if (typeof username !== "string" || !username.trim()) {
+    throw changePasswordError("username", "Username wajib diisi.");
+  }
+  if (typeof sn !== "string" || !sn.trim()) {
+    throw changePasswordError("sn", "Nomor kartu (SN) wajib diisi.");
+  }
+  if (typeof newPassword !== "string" || byteLength(newPassword) < 8) {
+    throw changePasswordError("newPassword", "Password baru minimal 8 karakter.");
+  }
+  if (byteLength(newPassword) > 72 || newPassword.includes("\0")) {
+    throw changePasswordError("newPassword", "Password baru terlalu panjang (maksimal 72 byte).");
+  }
+  if (newPassword !== confirmPassword) {
+    throw changePasswordError("confirmPassword", "Konfirmasi password tidak cocok.");
+  }
+  // SN tetap string agar angka nol di depan tidak hilang.
+  return { username: username.trim(), sn: sn.trim(), new_password: newPassword };
+}
+
+export async function forgotPassword(values, { signal } = {}) {
+  const payload = await request(FORGOT_PASSWORD_ENDPOINT, {
+    method: "patch",
+    data: buildForgotPasswordPayload(values),
+    signal,
+    headers: { Authorization: null },
+  });
+  assertAuthResponse(payload, "Password belum berhasil direset.");
+  return payload;
+}
+
+export function getForgotPasswordError(error) {
+  if (error?.field) return { message: error.message, field: error.field };
+  const status = error?.response?.status ?? error?.status;
+  let message = "Password belum berhasil direset. Silakan coba lagi.";
+  if (status === 401) message = "Username atau nomor kartu (SN) tidak sesuai.";
+  else if (status === 429) message = "Terlalu banyak percobaan reset password. Tunggu beberapa menit lalu coba lagi.";
+  else if (status === 400) message = error.response?.data?.message || "Periksa kembali data yang diisi.";
+  else if (status >= 500 && status <= 599) message = "Server sedang bermasalah. Silakan coba lagi nanti.";
+  else if (["ECONNABORTED", "ETIMEDOUT"].includes(error?.code)) message = "Server belum merespons. Silakan coba lagi.";
+  else if (error?.code === "ERR_NETWORK") message = "Tidak dapat terhubung ke server. Periksa koneksi Anda.";
+  return { message, field: status === 401 ? "sn" : null };
 }
 
 export function getChangePasswordError(error) {
