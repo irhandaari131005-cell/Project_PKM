@@ -63,14 +63,19 @@ function useCollection(resource, enabled = true) {
 
 function useSummary() {
   const [state, setState] = useState({ data: null, loading: true, error: "" });
+  const [revision, setRevision] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
+    // Saat memuat ulang, data lama tetap tampil (tidak berkedip) sampai data baru datang.
+    setState((previous) => ({ ...previous, loading: true, error: "" }));
     dashboardApi.getSummary({ signal: controller.signal })
       .then((data) => { if (!controller.signal.aborted) setState({ data, loading: false, error: "" }); })
-      .catch(() => { if (!controller.signal.aborted) setState({ data: null, loading: false, error: "Ringkasan belum dapat dimuat." }); });
+      .catch(() => {
+        if (!controller.signal.aborted) setState((previous) => ({ data: previous.data, loading: false, error: "Ringkasan belum dapat dimuat." }));
+      });
     return () => controller.abort();
-  }, []);
-  return state;
+  }, [revision]);
+  return { ...state, reload: () => setRevision((value) => value + 1) };
 }
 
 export default function useDashboardData({ includeTeachers = false } = {}) {

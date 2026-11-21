@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Clock3, LoaderCircle, ScanLine, X } from "lucide-react";
+import { Check, Clock3, LoaderCircle, X } from "lucide-react";
 import {
   attendanceApi,
   ATTENDANCE_TYPES,
@@ -38,6 +38,8 @@ export default function Attendance() {
   const [kind, setKind] = useState("masuk");
   const [processing, setProcessing] = useState(false);
   const [log, setLog] = useState([]);
+  // Jumlah tap berhasil/gagal sejak halaman dibuka (petugas tahu sudah berapa siswa terproses).
+  const [tally, setTally] = useState({ ok: 0, failed: 0 });
   const kindRef = useRef(kind);
   const queue = useRef([]);
   const busy = useRef(false);
@@ -92,6 +94,7 @@ export default function Attendance() {
       if (!mounted.current) break;
       const row = { ...entry, id: item.id, at: new Date() };
       setLog((current) => [row, ...current].slice(0, MAX_LOG));
+      setTally((current) => (entry.ok ? { ...current, ok: current.ok + 1 } : { ...current, failed: current.failed + 1 }));
     }
     busy.current = false;
     if (mounted.current) setProcessing(false);
@@ -137,86 +140,80 @@ export default function Attendance() {
       : "Tempelkan kartu Anda";
   const kindLabel = ATTENDANCE_TYPES.find(({ value }) => value === kind)?.label ?? "";
 
+  const failed = Boolean(latest && !latest.ok && !processing);
+
+  // Ringkas: header satu baris, tombol mode, panel status horizontal, lalu daftar hasil tap.
   return (
     <section aria-labelledby="attendance-title" className="pb-2 text-[#003D32]">
-      <div className="rounded-[24px] px-4 pb-5 pt-3 text-center shadow-[0_3px_5px_rgba(0,0,0,0.3),inset_0_4px_2px_rgba(0,0,0,0.4)] min-[380px]:pb-7 min-[380px]:pt-5">
-        <p className="flex items-center justify-center gap-1 text-[11px] font-medium ">
-          <Clock3 size={12} aria-hidden="true" />
+      <div className="flex items-center justify-between gap-2 rounded-[20px] px-4 py-3 shadow-[0_3px_5px_rgba(0,0,0,0.3),inset_0_4px_2px_rgba(0,0,0,0.4)]">
+        <div className="min-w-0">
+          <h1 id="attendance-title" className="text-[22px] font-bold leading-tight tracking-tight [text-shadow:1px_2px_3px_rgba(0,0,0,0.35)]">
+            Absensi
+          </h1>
+          <p className="truncate text-[10px]">{dateFormat.format(now)}</p>
+        </div>
+        <p className="flex shrink-0 items-center gap-1 rounded-full bg-[#003D32] px-2.5 py-1 text-[13px] font-semibold tabular-nums text-white">
+          <Clock3 size={13} aria-hidden="true" />
           <time dateTime={now.toISOString()}>{clockFormat.format(now)}</time>
         </p>
-        <h1
-          id="attendance-title"
-          className="text-[26px] font-bold leading-tight tracking-tight min-[380px]:text-[32px] [text-shadow:2px_3px_4px_rgba(0,0,0,0.4)]"
-        >
-          Absensi
-        </h1>
-        <p className="mt-1 text-[11px]">{dateFormat.format(now)}</p>
       </div>
 
-      <div
-        role="group"
-        aria-label="Jenis absensi"
-        className="relative mx-8 -mt-3 grid grid-cols-2 gap-2 md:mx-auto md:max-w-md"
-      >
-        {ATTENDANCE_TYPES.map(({ value, label }) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={kind === value}
-            onClick={() => setKind(value)}
-            className={`min-h-12 rounded-xl border-2 border-[#003D32] px-2 py-3 text-[13px] font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${kind === value ? "bg-[#003D32] text-white" : "bg-white text-[#003D32] hover:bg-emerald-50"}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div aria-busy={processing} className="mx-8 mt-6 text-center min-[380px]:mt-8 md:mx-auto md:max-w-md">
-        <div
-          aria-hidden="true"
-          className="flex aspect-square w-full items-center justify-center rounded-[12px] rounded-tr-[38px] border-[3px] border-[#002d24] bg-[#003D32] p-7"
-        >
-          <ScannerIllustration />
+      <div className="mx-4 mt-3 md:mx-auto md:max-w-md">
+        <div role="group" aria-label="Jenis absensi" className="grid grid-cols-2 gap-2">
+          {ATTENDANCE_TYPES.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={kind === value}
+              onClick={() => setKind(value)}
+              className={`min-h-10 rounded-lg border-2 border-[#003D32] px-2 py-2 text-[13px] font-semibold shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${kind === value ? "bg-[#003D32] text-white" : "bg-white text-[#003D32] hover:bg-emerald-50"}`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
-        <p
-          aria-live="polite"
-          className="mt-4 text-[20px] font-medium leading-tight min-[380px]:mt-5 min-[380px]:text-[22px]"
-        >
-          {status}
-        </p>
         <div
-          aria-hidden="true"
-          className={`mx-auto mt-3 flex h-[60px] w-[60px] items-center justify-center rounded-full border-2 bg-white p-[3px] min-[380px]:mt-4 min-[380px]:h-[66px] min-[380px]:w-[66px] ${latest && !latest.ok && !processing ? "border-red-700" : "border-[#003D32]"}`}
+          aria-busy={processing}
+          className={`mt-3 flex items-center gap-3 rounded-xl border-2 p-3 ${failed ? "border-red-700 bg-red-50" : "border-[#003D32] bg-[#003D32] text-white"}`}
         >
-          <span
-            className={`flex h-full w-full items-center justify-center rounded-full text-white ${latest && !latest.ok && !processing ? "bg-red-700" : "bg-[#003D32]"}`}
-          >
+          <div aria-hidden="true" className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg ${failed ? "bg-red-700 text-white" : "bg-white/10"}`}>
             {processing ? (
-              <LoaderCircle size={34} className="animate-spin" />
+              <LoaderCircle size={30} className="animate-spin" />
             ) : !latest ? (
-              <ScanLine size={32} strokeWidth={1.5} />
+              <div className="h-10 w-10"><ScannerIllustration /></div>
             ) : latest.ok ? (
-              <Check size={36} strokeWidth={1.5} />
+              <Check size={32} strokeWidth={1.75} />
             ) : (
-              <X size={34} strokeWidth={1.5} />
+              <X size={30} strokeWidth={1.75} />
             )}
-          </span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p aria-live="polite" className={`text-[17px] font-semibold leading-tight ${failed ? "text-red-800" : ""}`}>{status}</p>
+            <p className={`mt-0.5 text-[11px] ${failed ? "text-red-800" : "text-emerald-50/90"}`}>
+              Mode <strong>{kindLabel}</strong> · siswa berikutnya bisa langsung tap
+            </p>
+          </div>
         </div>
-        <p className="mt-3 text-[12px] min-[380px]:mt-4">
-          Mode <strong>{kindLabel}</strong> aktif. Pastikan TAP kartu dengan tepat!
-        </p>
-        <p className="mt-1 text-[11px] text-slate-600">
-          Siswa berikutnya bisa langsung tap tanpa menekan tombol apa pun.
-        </p>
+
+        <dl className="mt-2 grid grid-cols-2 gap-2 text-center text-[11px]">
+          <div className="rounded-lg bg-emerald-50 py-1">
+            <dt className="text-slate-600">Berhasil sesi ini</dt>
+            <dd className="text-[15px] font-bold tabular-nums">{tally.ok}</dd>
+          </div>
+          <div className="rounded-lg bg-red-50 py-1">
+            <dt className="text-slate-600">Gagal sesi ini</dt>
+            <dd className="text-[15px] font-bold tabular-nums text-red-800">{tally.failed}</dd>
+          </div>
+        </dl>
 
         {log.length > 0 && (
-          <ol aria-label="Hasil tap terakhir" className="mt-4 space-y-2 text-left">
+          <ol aria-label="Hasil tap terakhir" className="mt-3 space-y-1.5 text-left">
             {log.map((entry, index) => (
               <li
                 key={entry.id}
                 role={index === 0 ? (entry.ok ? "status" : "alert") : undefined}
-                className={`rounded-lg p-3 text-xs leading-relaxed ${entry.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"} ${index === 0 ? "" : "opacity-70"}`}
+                className={`rounded-lg px-3 py-2 text-xs leading-snug ${entry.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"} ${index === 0 ? "" : "opacity-70"}`}
               >
                 <p className="flex items-center justify-between gap-2">
                   <span className="font-semibold">
