@@ -9,6 +9,7 @@ import {
   Presentation,
   RefreshCw,
   Search,
+  Trash2,
   UsersRound,
   X,
 } from "lucide-react";
@@ -91,6 +92,13 @@ export default function Classes({ canManage = false }) {
       setSearch("");
       setFilters({ search: "", page: 1 });
     }
+    setRevision((value) => value + 1);
+  }
+  function deleted(result) {
+    setDialog(null);
+    setSuccess(result.message);
+    // Halaman terakhir bisa jadi kosong setelah data dihapus: kembali ke halaman 1.
+    setFilters((value) => ({ ...value, page: 1 }));
     setRevision((value) => value + 1);
   }
   function submitSearch(event) {
@@ -235,6 +243,7 @@ export default function Classes({ canManage = false }) {
           id={dialog.id}
           onClose={() => setDialog(null)}
           onSaved={saved}
+          onDeleted={deleted}
         />
       )}
     </section>
@@ -324,7 +333,7 @@ function RequestError({ message, onRetry }) {
   );
 }
 
-function ClassModal({ initialMode, id, onClose, onSaved, canManage = false }) {
+function ClassModal({ initialMode, id, onClose, onSaved, onDeleted, canManage = false }) {
   const [mode, setMode] = useState(initialMode);
   const [record, setRecord] = useState(null);
   const [values, setValues] = useState({ nama_kelas: "", id_wali_kelas: "" });
@@ -338,6 +347,7 @@ function ClassModal({ initialMode, id, onClose, onSaved, canManage = false }) {
   const [teacherRevision, setTeacherRevision] = useState(0);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const pending = useRef(null);
   const dialog = useRef(null);
   const close = useRef(onClose);
@@ -492,6 +502,28 @@ function ClassModal({ initialMode, id, onClose, onSaved, canManage = false }) {
         pending.current = null;
         setSubmitting(false);
         setError(getClassError(requestError, "save"));
+      }
+    }
+  }
+
+  async function remove() {
+    if (!canManage || !id || pending.current) return;
+    const controller = new AbortController();
+    pending.current = controller;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await classesApi.remove(id, { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      pending.current = null;
+      setSubmitting(false);
+      onDeleted?.(result);
+    } catch (requestError) {
+      if (!controller.signal.aborted) {
+        pending.current = null;
+        setSubmitting(false);
+        setConfirmDelete(false);
+        setError(getClassError(requestError, "delete"));
       }
     }
   }
@@ -663,7 +695,57 @@ function ClassModal({ initialMode, id, onClose, onSaved, canManage = false }) {
                 {error.message}
               </p>
             )}
-            <div className="mt-5 flex justify-end gap-2">
+            {confirmDelete ? (
+              <div
+                role="alertdialog"
+                aria-labelledby="class-delete-title"
+                className="mt-5 rounded-lg border border-red-200 bg-red-50 p-3 text-red-900"
+              >
+                <p id="class-delete-title" className="text-sm font-semibold">
+                  Hapus kelas "{current?.name}"?
+                </p>
+                <p className="mt-1 text-xs">
+                  Jadwal pelajaran kelas ini ikut terhapus. Kelas yang masih
+                  memiliki siswa tidak dapat dihapus.
+                </p>
+                <div className="mt-3 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => setConfirmDelete(false)}
+                    className="rounded-lg border border-red-900/30 bg-white px-4 py-2 text-sm disabled:opacity-50"
+                  >
+                    Tidak
+                  </button>
+                  <button
+                    type="button"
+                    disabled={submitting}
+                    onClick={remove}
+                    className="flex items-center gap-2 rounded-lg bg-red-700 px-4 py-2 text-sm text-white hover:bg-red-800 disabled:opacity-50"
+                  >
+                    {submitting && (
+                      <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />
+                    )}
+                    {submitting ? "Menghapus..." : "Ya, hapus"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+            <div className="mt-5 flex items-center justify-end gap-2">
+              {mode === "edit" && id && (
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => {
+                    setError(null);
+                    setConfirmDelete(true);
+                  }}
+                  className="mr-auto flex items-center gap-1 rounded-lg border border-red-700 px-3 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+                >
+                  <Trash2 size={15} aria-hidden="true" />
+                  Hapus
+                </button>
+              )}
               <button
                 type="button"
                 disabled={submitting}
@@ -689,6 +771,7 @@ function ClassModal({ initialMode, id, onClose, onSaved, canManage = false }) {
                 {submitting ? "Menyimpan..." : "Simpan kelas"}
               </button>
             </div>
+            )}
           </form>
         )}
       </section>

@@ -23,6 +23,6 @@ const config = {
   ],
 };
 
-export default function Extracurricular() {
-  return <SchoolActivitiesPage config={config} />;
+export default function Extracurricular({ canManage = false }) {
+  return <SchoolActivitiesPage config={config} canManage={canManage} />;
 }

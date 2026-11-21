@@ -99,6 +99,16 @@ export const classesApi = {
     const payload = await request(classPath(id), { method: "put", data: buildClassPayload(values), signal });
     return { ...normalizeClassRecord(payload, id), message: "Data kelas berhasil diperbarui." };
   },
+  async remove(id, { signal } = {}) {
+    const payload = await request(classPath(id), { method: "delete", signal });
+    const status = Number(payload?.status);
+    if ((status >= 400 && status <= 599) || payload?.status === false || payload?.success === false) {
+      const error = new Error("Data kelas belum berhasil dihapus.");
+      error.response = { status: status >= 400 && status <= 599 ? status : 422, data: payload };
+      throw error;
+    }
+    return { payload, message: "Data kelas berhasil dihapus." };
+  },
   async getTeachers({ signal } = {}) {
     const items = [];
     const seen = new Set();
@@ -123,18 +133,23 @@ export const classesApi = {
 export function getClassError(error, action = "load") {
   const status = error.response?.status;
   const fields = {};
-  if (status === 422) {
+  // 409 juga membawa errors per field (mis. nama kelas/wali kelas sudah dipakai) agar tampil di bawah input.
+  if (status === 422 || status === 409) {
     for (const field of [...Object.keys(CLASS_FIELDS), "id_kelas", "search"]) {
       const value = error.response?.data?.errors?.[field];
       const message = Array.isArray(value) ? value[0] : value;
       if (typeof message === "string") fields[field] = message;
     }
   }
-  let message = action === "save" ? "Data kelas belum dapat disimpan. Silakan coba lagi." : "Data kelas belum dapat dimuat. Silakan coba lagi.";
+  const serverMessage = typeof error.response?.data?.message === "string" ? error.response.data.message.trim() : "";
+  let message = action === "save" ? "Data kelas belum dapat disimpan. Silakan coba lagi."
+    : action === "delete" ? "Data kelas belum dapat dihapus. Silakan coba lagi."
+      : "Data kelas belum dapat dimuat. Silakan coba lagi.";
   if (status === 401) message = "Sesi berakhir. Silakan login kembali.";
   else if (status === 403) message = "Anda tidak memiliki izin mengakses atau mengubah data kelas.";
   else if (status === 404) message = "Kelas tidak ditemukan. Muat ulang daftar kelas.";
-  else if (status === 409) message = "Data kelas berbenturan dengan data yang sudah ada. Periksa nama dan wali kelas.";
+  // Pesan server paling jelas: "Nama kelas sudah dipakai." / "Kelas masih memiliki siswa...".
+  else if (status === 409) message = serverMessage || "Data kelas berbenturan dengan data yang sudah ada. Periksa nama dan wali kelas.";
   else if (status === 422) message = "Periksa kembali data yang diisi.";
   else if (status === 429) message = "Terlalu banyak permintaan. Silakan tunggu sebentar.";
   else if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") message = "Server belum merespons. Periksa data sebelum mencoba lagi.";

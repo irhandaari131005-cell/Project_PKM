@@ -7,6 +7,8 @@ export function canManageSchoolData(profile) {
 // tetap bergantung pada canManageSchoolData dan backend menolak request tulis (403).
 const studentViews = new Set([
   "dashboard", "account", "data_siswa", "data_guru", "classes", "attendance-history",
+  // Backend mengizinkan siswa membaca jadwal & ekstrakurikuler (tulis tetap khusus guru).
+  "schedules", "extracurricular",
   "notifications", "violations",
 ]);
 

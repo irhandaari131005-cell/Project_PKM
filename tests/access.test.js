@@ -10,7 +10,7 @@ test("only a teacher profile receives school management permissions", () => {
 });
 
 test("students can view school data, including teachers, but cannot enter attendance or edit", () => {
-  for (const view of ["dashboard", "account", "data_siswa", "data_guru", "classes", "attendance-history"]) {
+  for (const view of ["dashboard", "account", "data_siswa", "data_guru", "classes", "attendance-history", "schedules", "extracurricular"]) {
     assert.equal(canOpenDashboardView({ type: "siswa" }, view), true);
     assert.equal(canOpenDashboardView({ type: "guru" }, view), true);
   }

@@ -62,15 +62,18 @@ export default function ScheduleCard({ item, onDetail, onEdit }) {
         </dl>
 
         <div className="mt-auto flex items-end justify-between gap-3 pt-3">
-          <button
-            type="button"
-            aria-label={`Edit ${item.title}`}
-            onClick={onEdit}
-            className="flex min-h-8 items-center gap-1 rounded-md px-1 text-[10px] text-slate-500 transition-colors hover:text-[#0046bb] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
-          >
-            <Pencil size={12} aria-hidden="true" />
-            Edit jadwal
-          </button>
+          {/* Tanpa onEdit (akun siswa) tombol edit tidak ditampilkan; spacer menjaga tombol detail di kanan. */}
+          {onEdit ? (
+            <button
+              type="button"
+              aria-label={`Edit ${item.title}`}
+              onClick={onEdit}
+              className="flex min-h-8 items-center gap-1 rounded-md px-1 text-[10px] text-slate-500 transition-colors hover:text-[#0046bb] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-700"
+            >
+              <Pencil size={12} aria-hidden="true" />
+              Edit jadwal
+            </button>
+          ) : <span />}
           <button
             type="button"
             aria-label={`Detail ${item.title}`}

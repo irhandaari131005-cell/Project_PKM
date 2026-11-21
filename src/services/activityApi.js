@@ -104,6 +104,16 @@ export function createActivityApi({ endpoint, resource, view, buildPayload, with
     async update(id, values, { signal } = {}) {
       return normalizeRecord(await request(itemPath(id), { ...prepareWrite(buildPayload(values), values, "put"), signal }), id);
     },
+    async remove(id, { signal } = {}) {
+      const payload = await request(itemPath(id), { method: "delete", signal });
+      const status = Number(payload?.status);
+      if ((status >= 400 && status <= 599) || payload?.status === false || payload?.success === false) {
+        const error = new Error("Data belum berhasil dihapus.");
+        error.response = { status: status >= 400 && status <= 599 ? status : 422, data: payload };
+        throw error;
+      }
+      return payload;
+    },
   };
 }
 
@@ -119,7 +129,9 @@ export function getActivityError(error, action = "load") {
       }
     }
   }
-  let message = action === "save" ? "Data belum dapat disimpan. Silakan coba lagi." : "Data belum dapat dimuat. Silakan coba lagi.";
+  let message = action === "save" ? "Data belum dapat disimpan. Silakan coba lagi."
+    : action === "delete" ? "Data belum dapat dihapus. Silakan coba lagi."
+      : "Data belum dapat dimuat. Silakan coba lagi.";
   if (status === 401) message = "Sesi berakhir. Silakan login kembali.";
   else if (status === 403) message = "Anda tidak memiliki izin untuk mengakses atau mengubah data ini.";
   else if (status === 404) message = "Data tidak ditemukan. Muat ulang daftar.";
